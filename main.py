@@ -108,5 +108,18 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.ALL, lounge_host))
-    print("🐕‍🦺 LOUNGE HOST: Monitoring for Frisky and Spammers... Arf!")
-    app.run_polling()
+    
+    # 🔥 Firebase / Google Cloud Vercel equivalent hosting logic
+    port = int(os.environ.get("PORT", 8080))
+    webhook_url = os.environ.get("WEBHOOK_URL")
+    
+    if webhook_url:
+        print(f"🔥 FIREBASE/CLOUD MODE: Starting Webhook on port {port}...")
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            webhook_url=f"{webhook_url.rstrip('/')}/{TOKEN}"
+        )
+    else:
+        print("🐕‍🦺 LOCAL/WORKER MODE: Monitoring for Frisky and Spammers... Arf!")
+        app.run_polling()
