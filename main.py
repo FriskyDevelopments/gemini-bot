@@ -1,22 +1,112 @@
 import os
+import logging
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 import google.generativeai as genai
-from telegram.ext import ApplicationBuilder
 
-# --- CLOUD CONFIG ---
-# Instead of input(), we pull from Render's Environment Variables
-gemini_key = os.getenv("GEMINI_API_KEY")
-telegram_token = os.getenv("TELEGRAM_TOKEN")
+# Naive load .env
+try:
+    with open('/Users/friskypup/gemini-bot/.env') as f:
+        for line in f:
+            if '=' in line and not line.startswith('#'):
+                k, v = line.strip().split('=', 1)
+                os.environ[k] = v
+except: pass
 
-if not gemini_key or not telegram_token:
-    print("❌ ERROR: Missing GEMINI_API_KEY or TELEGRAM_TOKEN in Render Environment Variables.")
-    exit(1)
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+ALPHA = "8091939499"
+ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
+MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
-genai.configure(api_key=gemini_key)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel('gemini-1.5-pro')
+SYSTEM_PROMPT = "You are Geminipupbot, a playful pupplay-themed group helper! If toxic, reply [DELETE]. Otherwise, be a pup."
 
-def initialize_pup():
-    print("🐾 --- PUP IS LIVE ON RENDER --- 🐾")
-    # Add the rest of your bot logic here
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
-if __name__ == "__main__":
-    initialize_pup()
-    # Your bot starting logic (app.run_polling(), etc.)
+# Load banned words for spammer detection
+BANNED_WORDS = set()
+try:
+    with open('/Users/friskypup/Downloads/Telegram Lite/bandite_-1003446305734.txt', 'r') as f:
+        words = f.read().splitlines()[1:]
+        BANNED_WORDS = {w.lower().strip() for w in words if w.strip()}
+except Exception as e:
+    print(f"Could not load banned words: {e}")
+
+# Cache: new_user_id -> inviter_name
+invitations = {} 
+
+async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user: return
+    
+    user_id = str(update.effective_user.id)
+    chat_id = str(update.effective_chat.id)
+    
+    # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
+    if update.message.new_chat_members:
+        inviter = update.message.from_user
+        inviter_name = inviter.username or inviter.first_name
+        for member in update.message.new_chat_members:
+            if inviter.id != member.id:
+                invitations[member.id] = inviter_name
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=f"Arf! Welcome to the Lounge, {member.first_name}! 🥂🔞 Stay elite. 🐾✨")
+            except: pass
+        return
+
+    # 2. CHECK FOR SPAMMERS
+    if update.message.text:
+        text_lower = update.message.text.lower()
+        if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
+            spammer = update.message.from_user
+            spammer_name = spammer.username or spammer.first_name
+            inviter = invitations.get(spammer.id, "Unknown / Join Link")
+            
+            report = f"🚨 **SPAMMER DETECTED**\nMsg: {update.message.text}\n👤 Spammer: {spammer_name}\n🔑 Admitted by: {inviter}"
+            
+            print(report)
+            log_id = ADMIN_LOUNGE_ID if ADMIN_LOUNGE_ID else chat_id
+            try:
+                await context.bot.send_message(chat_id=log_id, text=report)
+                await update.message.delete()
+            except Exception as e:
+                print(f"Could not send log report or delete message: {e}")
+                
+    # 3. ALPHA RECOGNITION (Frisky)
+    if user_id == ALPHA and update.message.text:
+        user_text = update.message.text
+        print(f"🐾 Alpha Detected: Frisky sent a message in chat {chat_id}")
+        try:
+            prompt = f"{SYSTEM_PROMPT}\nUser: {user_text}"
+            response = model.generate_content(prompt)
+            reply_text = response.text.replace("[DELETE]", "").strip()
+            if reply_text:
+                await context.bot.send_message(chat_id=chat_id, text=reply_text)
+                print("✅ Reply sent successfully to Telegram.")
+        except Exception as e:
+            print(f"❌ ERROR: I tried to bark but Telegram stopped me: {e}")
+        return
+
+    # 4. ADMIN RULE REMINDER
+    if (chat_id == ADMIN_LOUNGE_ID or user_id == ALPHA) and update.message.text:
+        if "remind the group of the rules" in update.message.text.lower():
+            if MAIN_GROUP_ID:
+                try:
+                    rules_caption = "🐾 **Lounge Rules Reminder** 🐾\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n*The Shadow Guardian is watching...*"
+                    image_path = "/Users/friskypup/Downloads/PUPBOT.jpg"
+                    if os.path.exists(image_path):
+                        await context.bot.send_photo(chat_id=MAIN_GROUP_ID, photo=open(image_path, 'rb'), caption=rules_caption, parse_mode='Markdown')
+                    else:
+                        await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=rules_caption, parse_mode='Markdown')
+                    await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
+                except Exception as e:
+                    await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to send rules to main lounge: {e}")
+            else:
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
+            return
+
+if __name__ == '__main__':
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.ALL, lounge_host))
+    print("🐕‍🦺 LOUNGE HOST: Monitoring for Frisky and Spammers... Arf!")
+    app.run_polling()
