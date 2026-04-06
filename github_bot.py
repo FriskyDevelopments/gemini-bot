@@ -12,7 +12,7 @@ try:
 except Exception as e:
     print(f"Failed to initialize Gemini: {e}")
 
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+GITHUB_TOKEN = os.environ.get("GITHUB_PUPBOT_TOKEN")
 
 @app.route("/", methods=["GET"])
 def index():
