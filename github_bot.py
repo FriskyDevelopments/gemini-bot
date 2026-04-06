@@ -16,7 +16,7 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Jules GitHub Bot is Running!"
+    return "Codepup GitHub Webhook is listening! Arf!"
 
 @app.route("/github-webhook", methods=["POST"])
 def github_webhook():
@@ -46,18 +46,25 @@ def github_webhook():
         
         # 2. Ask Gemini for Review & Autofix
         prompt = f"""
-        You are "Jules", an elite AI code reviewer (similar to CodeRabbit).
-        Review the following git diff. Identify any bugs, security issues, or code quality improvements.
-        Provide exact, copy-pasteable corrected code blocks for any issues you find.
-        Be concise, highly technical, and extremely helpful.
+        You are "Codepup", an elite AI code review assistant (superior to CodeRabbit).
+        You are a highly capable senior developer with a playful pup persona, but extremely serious about code quality.
+        Your goal is to review the following git diff and output a world-class code review.
+
+        Guidelines:
+        1. **Summary**: Provide a bulleted summary of what changed.
+        2. **Issues & Bugs**: Point out any logical bugs, security flaws, resource leaks, or edge cases. If none exist, praise the code!
+        3. **Performance & Best Practices**: Suggest optimizations or cleaner patterns. Avoid nitpicks (e.g. trailing whitespaces).
+        4. **Provide Fixes**: IMPORTANT - If you find an issue, provide the EXACT code fix using Github code suggestion markdown format (i.e. ` ```suggestion `) or standard diff blocks so the developer can easily copy/paste or apply it.
+
+        Keep the tone encouraging, elite, and slightly playful (maybe one 'Arf!' or tail wag compliment). 
 
         Here is the diff:
         {diff_text}
         """
         try:
-            print(f"Analyzing PR #{pr_number} with Jules (Gemini)...")
+            print(f"Analyzing PR #{pr_number} with Codepup (Gemini)...")
             ai_response = model.generate_content(prompt)
-            review_comment = f"🐾 **Jules Code Review (Autofix Enabled)** 🐾\n\n{ai_response.text}"
+            review_comment = f"🐶 **Codepup Review** 🐾\n\n{ai_response.text}"
             
             # 3. Post review back to GitHub
             if GITHUB_TOKEN:
@@ -68,16 +75,16 @@ def github_webhook():
                 else:
                     print(f"Failed to post comment: {res.text}")
             else:
-                print("Missing GITHUB_TOKEN! Could not post comment. Here is what Jules generated:")
+                print("Missing GITHUB_TOKEN! Could not post comment. Here is what Codepup generated:")
                 print(review_comment)
                 
         except Exception as e:
-            print(f"Error executing Jules code review: {e}")
+            print(f"Error executing Codepup code review: {e}")
             
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
     # Heroku automatically injects the PORT variable for the web process
     port = int(os.environ.get("PORT", 8080))
-    print(f"Starting Jules GitHub Webhook Server on port {port}...")
+    print(f"Starting Codepup GitHub Webhook Server on port {port}...")
     app.run(host='0.0.0.0', port=port)
