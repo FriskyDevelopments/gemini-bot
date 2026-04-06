@@ -56,18 +56,18 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
         if GITHUB_TOKEN:
             comment_url = f"https://api.github.com/repos/{repo_full_name}/issues/{pr_number}/comments"
             # Remove the Accept header for posting the comment
-            post_headers = {{'Authorization': f"token {{GITHUB_TOKEN}}"}} if GITHUB_TOKEN else {{}}
-            res = requests.post(comment_url, headers=post_headers, json={{"body": review_comment}})
+            post_headers = {'Authorization': f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
+            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment})
             if res.status_code == 201:
                 print(f"Successfully posted review to PR #{pr_number}")
                 return True
             else:
-                print(f"Failed to post comment: {{res.text}}")
+                print(f"Failed to post comment: {res.text}")
         else:
             print("Missing GITHUB_TOKEN! Could not post comment. Here is what Codepup generated:")
             print(review_comment)
     except Exception as e:
-        print(f"Error executing Codepup code review: {{e}}")
+        print(f"Error executing Codepup code review: {e}")
     return False
 
 @app.route("/github-webhook", methods=["POST"])
@@ -75,7 +75,7 @@ def github_webhook():
     event = request.headers.get('X-GitHub-Event')
     payload = request.json
 
-    print(f"Received GitHub Webhook: {{event}}")
+    print(f"Received GitHub Webhook: {event}")
 
     # 1. Listen for new PRs or changes to a PR
     if event == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
@@ -93,11 +93,11 @@ def github_webhook():
             pr_number = payload["issue"]["number"]
             repo_full_name = payload["repository"]["full_name"]
             pr_api_url = payload["issue"]["pull_request"]["url"]
-            print(f"Manual Codepup review triggered via comment on PR #{{pr_number}}")
+            print(f"Manual Codepup review triggered via comment on PR #{pr_number}")
             # For PR API URLs, we must send the V3 diff accept header
             perform_review(pr_number, pr_api_url, repo_full_name, use_api_header=True)
 
-    return jsonify({{"status": "ok"}})
+    return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
     # Heroku automatically injects the PORT variable for the web process
