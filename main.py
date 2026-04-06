@@ -74,8 +74,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
     # 3. CONVERSATIONAL LOGIC
     # Trigger if it's Frisky (Alpha), if the bot is mentioned by name, or if someone replies directly to the bot.
+    text_lower = update.message.text.lower() if update.message.text else ""
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
-    bot_mentioned = "pupbot" in update.message.text.lower() or "pup" in update.message.text.lower()
+    bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
     
     if (user_id == ALPHA or is_reply_to_bot or bot_mentioned) and update.message.text:
         user_text = update.message.text
