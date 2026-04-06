@@ -72,17 +72,28 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 print(f"Could not send log report or delete message: {e}")
                 
-    # 3. ALPHA RECOGNITION (Frisky)
-    if user_id == ALPHA and update.message.text:
+    # 3. CONVERSATIONAL LOGIC
+    # Trigger if it's Frisky (Alpha), if the bot is mentioned by name, or if someone replies directly to the bot.
+    is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
+    bot_mentioned = "pupbot" in update.message.text.lower() or "pup" in update.message.text.lower()
+    
+    if (user_id == ALPHA or is_reply_to_bot or bot_mentioned) and update.message.text:
         user_text = update.message.text
-        print(f"🐾 Alpha Detected: Frisky sent a message in chat {chat_id}")
+        user_name = update.effective_user.first_name
+        
+        print(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
+        
         try:
-            prompt = f"{SYSTEM_PROMPT}\nUser: {user_text}"
+            # Tell Gemini who it's talking to
+            relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
+            prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
+            
             response = model.generate_content(prompt)
             reply_text = response.text.replace("[DELETE]", "").strip()
+            
             if reply_text:
-                await context.bot.send_message(chat_id=chat_id, text=reply_text)
-                print("✅ Reply sent successfully to Telegram.")
+                await context.bot.send_message(chat_id=chat_id, text=reply_text, reply_to_message_id=update.message.message_id)
+                print(f"✅ Barked back at {user_name} successfully.")
         except Exception as e:
             print(f"❌ ERROR: I tried to bark but Telegram stopped me: {e}")
         return
@@ -123,3 +134,4 @@ if __name__ == '__main__':
     else:
         print("🐕‍🦺 LOCAL/WORKER MODE: Monitoring for Frisky and Spammers... Arf!")
         app.run_polling()
+
