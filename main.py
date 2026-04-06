@@ -24,6 +24,93 @@ SYSTEM_PROMPT = "You are Geminipupbot, a playful pupplay-themed group helper! If
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+import threading
+import time
+
+def snag_engine():
+    oci_ad = os.getenv("OCI_AD")
+    oci_tenancy = os.getenv("OCI_TENANCY")
+    oci_image = os.getenv("OCI_IMAGE")
+    oci_subnet = os.getenv("OCI_SUBNET")
+    oci_user = os.getenv("OCI_USER")
+    oci_fingerprint = os.getenv("OCI_FINGERPRINT")
+    oci_region = os.getenv("OCI_REGION")
+    oci_key_content = os.getenv("OCI_KEY_CONTENT")
+    pup_chat_id = os.getenv("PUP_CHAT_ID", MAIN_GROUP_ID)
+    
+    if not all([oci_ad, oci_tenancy, oci_image, oci_subnet, oci_user, oci_fingerprint, oci_region, oci_key_content]):
+        print("OCI environment variables are incomplete. Snag engine inactive.")
+        return
+        
+    try:
+        import oci
+        config = {
+            "user": oci_user,
+            "key_content": oci_key_content.replace("\\n", "\n"),
+            "fingerprint": oci_fingerprint,
+            "tenancy": oci_tenancy,
+            "region": oci_region
+        }
+        compute_client = oci.core.ComputeClient(config)
+    except ImportError:
+        print("oci package not installed. Snag engine inactive.")
+        return
+    except Exception as e:
+        print(f"Failed to init OCI client: {e}")
+        return
+        
+    print("🎯 JULES : PYTHON SNAG ENGINE [PUP BOT ACTIVE]")
+    
+    while True:
+        print("Attempting to claim A1 Bunker...")
+        try:
+            instance_details = oci.core.models.LaunchInstanceDetails(
+                availability_domain=oci_ad,
+                compartment_id=oci_tenancy,
+                shape="VM.Standard.A1.Flex",
+                shape_config=oci.core.models.LaunchInstanceShapeConfigDetails(
+                    ocpus=4.0,
+                    memory_in_gbs=24.0
+                ),
+                source_details=oci.core.models.InstanceSourceViaImageDetails(
+                    image_id=oci_image
+                ),
+                create_vnic_details=oci.core.models.CreateVnicDetails(
+                    subnet_id=oci_subnet,
+                    assign_public_ip=True
+                ),
+                display_name="Clipsflow-Bunker-Pro"
+            )
+            
+            response = compute_client.launch_instance(instance_details)
+            print("✅ MISSION SUCCESS: Bunker Secured!")
+            
+            import urllib.request, urllib.parse
+            token = os.getenv("TELEGRAM_TOKEN")
+            msg = f"🐾 [ PUP BOT ] : BUNKER SECURED.\\n\\nNode: {oci_ad}\\nStatus: Operational"
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            data = urllib.parse.urlencode({"chat_id": pup_chat_id, "text": msg}).encode()
+            try:
+                urllib.request.urlopen(url, data=data)
+            except Exception as e:
+                print("Failed to notify:", e)
+                
+            break
+            
+        except oci.exceptions.ServiceError as e:
+            if "Out of host capacity" in e.message or "Out of capacity" in e.message:
+                print("❌ Status: Hub Capacity Full. Retrying...")
+            elif "TooManyRequests" in e.message or e.status == 429:
+                print("⚠️ Status: Rate Limited. Cooling down...")
+                time.sleep(60)
+            else:
+                print(f"❓ Unknown ServiceError: {e}")
+        except Exception as e:
+            print(f"❓ Unknown Error: {e}")
+            
+        import random
+        sleep_time = 15 + random.randint(0, 10)
+        time.sleep(sleep_time)
 # Load banned words for spammer detection
 BANNED_WORDS = set()
 try:
@@ -118,6 +205,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
 if __name__ == '__main__':
+    threading.Thread(target=snag_engine, daemon=True).start()
+    
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.ALL, lounge_host))
     
