@@ -8,7 +8,7 @@ app = Flask(__name__)
 # Configure Gemini
 try:
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = genai.GenerativeModel('gemini-1.5-pro')
+    model = genai.GenerativeModel('gemini-1.5-pro-latest')
 except Exception as e:
     print(f"Failed to initialize Gemini: {e}")
 
