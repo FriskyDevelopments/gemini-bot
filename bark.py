@@ -4,7 +4,7 @@ import urllib.request, urllib.parse
 
 try:
     genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = genai.GenerativeModel('gemini-1.5-pro-latest')
+    model = genai.GenerativeModel('gemini-2.5-pro')
 
     prompt = "You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'! Say an energetic, unprompted greeting to start the party and get people typing. Ask who wants a treat or who wants to play! Keep it short and engaging, under 40 words! Use pup terminology naturally."
 
