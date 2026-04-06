@@ -20,7 +20,11 @@ MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-pro')
-SYSTEM_PROMPT = "You are Geminipupbot, a playful pupplay-themed group helper! If toxic, reply [DELETE]. Otherwise, be a pup."
+SYSTEM_PROMPT = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'! 
+This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle. 
+Your primary goal is to ENERGIZE the room, keep the party highly interactive, and make the lounge engaging! 
+Act as the ultimate MC/Party Host: ask playful icebreaker questions, hype up the members, use pup-play terminology naturally (barks, tail wags, whimpers, treats, ear scratches), and start fun conversations!
+If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a legendary pup host!"""
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -137,7 +141,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if inviter.id != member.id:
                 invitations[member.id] = inviter_name
             try:
-                await context.bot.send_message(chat_id=chat_id, text=f"Arf! Welcome to the Lounge, {member.first_name}! 🥂🔞 Stay elite. 🐾✨")
+                await context.bot.send_message(chat_id=chat_id, text=f"Arf arf!! 🐾 Welcome to the Pup Lounge, {member.first_name}! 🥂✨ I'm Pupbot, your host! Grab a bowl, stretch those paws, and give the pack a bark! Who's ready to play?")
             except: pass
         return
 
