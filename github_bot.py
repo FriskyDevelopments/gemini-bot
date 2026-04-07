@@ -89,7 +89,7 @@ def github_webhook():
     # 2. Listen for manual trigger via comments (@pupbot or /pupbot)
     elif event == "issue_comment" and payload.get("action") == "created":
         comment_body = payload["comment"]["body"].lower()
-        if ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body) and "pull_request" in payload["issue"]:
+        if ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body or "@gemini" in comment_body or "gemini" in comment_body) and "pull_request" in payload["issue"]:
             pr_number = payload["issue"]["number"]
             repo_full_name = payload["repository"]["full_name"]
             pr_api_url = payload["issue"]["pull_request"]["url"]
