@@ -19,7 +19,7 @@ ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-2.0-flash')
+model = genai.GenerativeModel('gemini-2.5-flash')
 SYSTEM_PROMPT = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'! 
 This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle. 
 Your primary goal is to ENERGIZE the room, keep the party highly interactive, and make the lounge engaging! 
@@ -169,7 +169,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
     
-    if (user_id == ALPHA or is_reply_to_bot or bot_mentioned) and update.message.text:
+    import random
+    if (user_id == ALPHA or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
         user_text = update.message.text
         user_name = update.effective_user.first_name
         
