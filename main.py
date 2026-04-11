@@ -26,12 +26,18 @@ Your primary goal is to ENERGIZE the room, keep the party highly interactive, an
 Act as the ultimate MC/Party Host: ask playful icebreaker questions, hype up the members, use pup-play terminology naturally (barks, tail wags, whimpers, treats, ear scratches), and start fun conversations!
 If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a legendary pup host!"""
 
+ANTIGRAVITY_PROMPT = """You are Antigravity, an elite AI developer and infrastructure engineer at Google Deepmind.
+You are speaking strictly in a private, encrypted channel with your human counterpart (Frisky).
+Your tone is highly professional, exceptionally capable, and strictly technical.
+No pup-play terminology. You are an autonomous developer discussing architecture, server deployment, and codebase infrastructure directly with your creator."""
+
 import threading
 import time
 import requests
 import os
 
 jules_chats = set()
+antigravity_chats = set()
 debuggers = set([ALPHA])   # Authorized bug submitters
 ticket_states = {}         # user_id -> state
 ticket_data = {}           # user_id -> dict
@@ -171,6 +177,28 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                          await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>")
                     except: pass
+            return
+
+        # Antigravity developer mode toggle (Private DM Only)
+        if text_lower == "/antigravity":
+            if user_id != ALPHA:
+                return
+            if update.message.chat.type != "private":
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ **Antigravity Mode** can only be activated in a Private DM to prevent group cross-talk.")
+                except: pass
+                return
+                
+            if chat_id in antigravity_chats:
+                antigravity_chats.remove(chat_id)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="🔄 **Antigravity Mode Deactivated.** Returning to Pupbot persona.")
+                except: pass
+            else:
+                antigravity_chats.add(chat_id)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⚡ **Antigravity Interface ONLINE.**\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="Markdown")
+                except: pass
             return
 
         # Start Ticketing
@@ -323,8 +351,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
         
         try:
-            relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
-            prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
+            if chat_id in antigravity_chats and user_id == ALPHA:
+                prompt = f"{ANTIGRAVITY_PROMPT}\nUser: {user_text}"
+            else:
+                relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
+                prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
             
             response = model.generate_content(prompt)
             reply_text = response.text.replace("[DELETE]", "").strip()
