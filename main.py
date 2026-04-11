@@ -179,14 +179,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except: pass
             return
 
-        # Antigravity developer mode toggle (Private DM Only)
+        # Antigravity developer mode toggle (Private DM Only, unless bypassed)
         if text_lower == "/antigravity":
             if user_id != ALPHA:
-                return
-            if update.message.chat.type != "private":
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ **Antigravity Mode** can only be activated in a Private DM to prevent group cross-talk.")
-                except: pass
                 return
                 
             if chat_id in antigravity_chats:
@@ -194,11 +189,19 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="🔄 **Antigravity Mode Deactivated.** Returning to Pupbot persona.")
                 except: pass
-            else:
-                antigravity_chats.add(chat_id)
+                return
+                
+            if update.message.chat.type != "private":
+                ticket_states[user_id] = "antigravity_bypass"
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="⚡ **Antigravity Interface ONLINE.**\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="Markdown")
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ **Antigravity Mode** is locked to Private DMs to prevent group cross-talk.\n\n*Enter bypass password to summon Antigravity into this communal chat:*", parse_mode="Markdown")
                 except: pass
+                return
+                
+            antigravity_chats.add(chat_id)
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="⚡ **Antigravity Interface ONLINE.**\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="Markdown")
+            except: pass
             return
 
         # Start Ticketing
@@ -267,7 +270,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             state = ticket_states[user_id]
-            if state == "ping_comment_entry":
+            if state == "antigravity_bypass":
+                if text_lower == "ghost":
+                    antigravity_chats.add(chat_id)
+                    del ticket_states[user_id]
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="⚡ **BYPASS ACCEPTED: Antigravity Core ONLINE.**\n\nI am now monitoring this communal chat as your AI Developer. Let's start planning.", parse_mode="Markdown")
+                    except: pass
+                else:
+                    del ticket_states[user_id]
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ **Access Denied.** Incorrect bypass password. Returning to standard operations.", parse_mode="Markdown")
+                    except: pass
+                return
+            elif state == "ping_comment_entry":
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
                 if github_token:
@@ -351,8 +367,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
         
         try:
-            if chat_id in antigravity_chats and user_id == ALPHA:
-                prompt = f"{ANTIGRAVITY_PROMPT}\nUser: {user_text}"
+            # Check if this chat is in antigravity mode (applies to ALL messages in the chat if active)
+            if chat_id in antigravity_chats:
+                prompt = f"{ANTIGRAVITY_PROMPT}\nUser: {user_name} ({user_id})\nMessage: {user_text}"
             else:
                 relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
                 prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
