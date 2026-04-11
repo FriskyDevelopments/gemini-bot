@@ -214,7 +214,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await asyncio.to_thread(requests.post, url, headers=headers, json=data)
                     except Exception: pass
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nComment successfully relayed to GitHub repository.", parse_mode="Markdown")
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nAntigravity has received your feedback and it is logged to GitHub.", parse_mode="Markdown")
                 except: pass
             else:
                 keyboard = [
@@ -252,7 +252,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 del ticket_states[user_id]
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ **Comment Saved!** Logged directly to GitHub Issues.", parse_mode="Markdown")
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **Comment Saved!** Antigravity has received your logic feedback.", parse_mode="Markdown")
                 except: pass
                 return
             elif state == "project_other":
@@ -282,7 +282,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 del ticket_states[user_id]
                 ticket_data.pop(user_id, None)
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=f"✅ **Ticket Submitted!** Successfully routed to `{project}` CI/CD pipeline.", parse_mode="Markdown")
+                    await context.bot.send_message(chat_id=chat_id, text=f"✅ **Ticket Submitted!** Antigravity has received your report and injected it into the `{project}` CI/CD pipeline.", parse_mode="Markdown")
                 except: pass
                 return
 
@@ -381,7 +381,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: pass
             
         await query.answer()
-        await query.edit_message_text("🚨 **EMERGENCY FLARE FIRED!**\nGitHub CI/CD has been alerted that Clipsflow is unresponsive.", parse_mode="Markdown")
+        await query.edit_message_text("🚨 **EMERGENCY FLARE FIRED!**\nAntigravity is aware. GitHub CI/CD has been alerted that Clipsflow is unresponsive.", parse_mode="Markdown")
         return
 
     if query.data == "ping_help":
