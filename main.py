@@ -201,10 +201,27 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Start Ticketing
-        if text_lower == "/ping":
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nChanges applied successfully. Try `/ticket`.", parse_mode="Markdown")
-            except: pass
+        if text_lower.startswith("/ping"):
+            comment = text[5:].strip()
+            if comment:
+                username = update.effective_user.username or str(user_id)
+                url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
+                if github_token:
+                    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
+                    data = {"title": f"Ping Feedback from @{username}", "body": comment, "labels": ["feedback", "pupbot-routed"]}
+                    try:
+                        import asyncio
+                        await asyncio.to_thread(requests.post, url, headers=headers, json=data)
+                    except Exception: pass
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nComment successfully relayed to GitHub repository.", parse_mode="Markdown")
+                except: pass
+            else:
+                keyboard = [[InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nChanges applied successfully. Try `/ticket`.", parse_mode="Markdown", reply_markup=reply_markup)
+                except: pass
             return
 
         # In-Progress Ticketing
@@ -218,7 +235,23 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             state = ticket_states[user_id]
-            if state == "project_other":
+            if state == "ping_comment_entry":
+                username = update.effective_user.username or str(user_id)
+                url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
+                if github_token:
+                    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
+                    data = {"title": f"Logic Comment from @{username}", "body": text, "labels": ["feedback", "pupbot-routed"]}
+                    try:
+                        import asyncio
+                        await asyncio.to_thread(requests.post, url, headers=headers, json=data)
+                    except Exception: pass
+                
+                del ticket_states[user_id]
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **Comment Saved!** Logged directly to GitHub Issues.", parse_mode="Markdown")
+                except: pass
+                return
+            elif state == "project_other":
                 ticket_data[user_id] = {"project": text}
                 ticket_states[user_id] = "desc"
                 try:
@@ -322,6 +355,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
     
+    if query.data == "ping_comment":
+        ticket_states[user_id] = "ping_comment_entry"
+        await query.answer()
+        await query.edit_message_text(
+            "👔 **Logic Feedback:**\nPlease type your comment about the logic. It will be logged to GitHub.",
+            parse_mode="Markdown"
+        )
+        return
+
     if not query.data.startswith("ticket_proj:"):
         return
         
