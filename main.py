@@ -26,6 +26,16 @@ Your primary goal is to ENERGIZE the room, keep the party highly interactive, an
 Act as the ultimate MC/Party Host: ask playful icebreaker questions, hype up the members, use pup-play terminology naturally (barks, tail wags, whimpers, treats, ear scratches), and start fun conversations!
 If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a legendary pup host!"""
 
+JULES_PROMPT = """You are Jules, an elite, highly intelligent Diagnostic AI and Project Routing Manager.
+Your job is to take bug reports from the developer or users and prepare them for GitHub Issues.
+1. Analyze the user's issue.
+2. If the user does not specify WHICH project the bug affects (e.g., ClipFLOW, Nebulosa, Database, Server, Extension), YOU MUST ACT AS A DIAGNOSTIC AGENT and ask them clarifying questions until they specify the valid project context.
+3. Once you have a clear understanding of the bug and the exact project it belongs to, reply with EXACTLY the following format and nothing else (do not include markdown block quotes):
+[CREATE GITHUB ISSUE: Title: <generate a brief title> Body: <describe the bug thoroughly with the project name>]"""
+
+jules_chats = set()
+github_token = os.getenv("GITHUB_PUPBOT_TOKEN") or os.getenv("GITHUB_TOKEN")
+
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 import threading
@@ -145,6 +155,19 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except: pass
         return
 
+    # 1.5 COMMAND INTERCEPTION (JULES/BUGS)
+    if update.message.text:
+        command_text = update.message.text.strip().lower()
+        if command_text == "/activate_jules":
+            jules_chats.add(chat_id)
+            await context.bot.send_message(chat_id=chat_id, text="👔 **Jules Diagnostic Mode ACTIVATED.**\nI am now acting as an intelligent routing AI. Describe the bug you are facing, and I will validate the context before pushing it to GitHub Actions.", parse_mode="Markdown")
+            return
+        elif command_text == "/deactivate_jules":
+            if chat_id in jules_chats:
+                jules_chats.remove(chat_id)
+            await context.bot.send_message(chat_id=chat_id, text="🛑 **Jules Deactivated.** Returning conversational engine to Pupbot mode.", parse_mode="Markdown")
+            return
+
     # 2. CHECK FOR SPAMMERS
     if update.message.text:
         text_lower = update.message.text.lower()
@@ -179,16 +202,42 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             # Tell Gemini who it's talking to
             relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
-            prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
+            
+            if chat_id in jules_chats:
+                prompt = f"{JULES_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
+            else:
+                prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
             
             response = model.generate_content(prompt)
             reply_text = response.text.replace("[DELETE]", "").strip()
             
+            if chat_id in jules_chats and "[CREATE GITHUB ISSUE:" in reply_text:
+                import re
+                import httpx
+                match = re.search(r"Title:\s*(.*?)\s*Body:\s*(.*)]", reply_text, re.DOTALL | re.IGNORECASE)
+                if match and github_token:
+                    title = match.group(1).strip()
+                    body = match.group(2).strip()
+                    
+                    url = "https://api.github.com/repos/FriskyDevelopments/ClipFLOW/issues"
+                    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
+                    data = {"title": title, "body": body, "labels": ["bug", "jules-routed"]}
+                    
+                    async with httpx.AsyncClient() as client:
+                        await client.post(url, headers=headers, json=data)
+                        
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 **Jules:** Issue validated and successfully routed to GitHub CI/CD pipeline!\n\n**Ticket Details:**\n{title}", parse_mode="Markdown")
+                else:
+                    await context.bot.send_message(chat_id=chat_id, text="👔 **Jules:** Error parsing the ticket or missing GitHub Token. Check server logs.", parse_mode="Markdown")
+                return
+
             if reply_text:
+                if chat_id in jules_chats and not reply_text.startswith("👔"):
+                    reply_text = f"👔 **Jules:**\n{reply_text}"
                 await context.bot.send_message(chat_id=chat_id, text=reply_text, reply_to_message_id=update.message.message_id)
-                print(f"✅ Barked back at {user_name} successfully.")
+                print(f"✅ AI responded back to {user_name} successfully.")
         except Exception as e:
-            print(f"❌ ERROR: I tried to bark but Telegram stopped me: {e}")
+            print(f"❌ ERROR: I tried to respond but Telegram stopped me: {e}")
         return
 
     # 4. ADMIN RULE REMINDER
