@@ -180,7 +180,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 keyboard = [
                     [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
-                     InlineKeyboardButton("Nebulosa", callback_data="ticket_proj:Nebulosa")],
+                     InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
                     [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
                      InlineKeyboardButton("Other", callback_data="ticket_proj:Other")]
                 ]
@@ -189,7 +189,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await context.bot.send_message(
                         chat_id=chat_id, 
-                        text="👔 **Jules Diagnostic Interface**\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich **Project** is this bug affecting?", 
+                        text="👔 **Jules Diagnostic Interface**\n_(Use this strictly to submit detailed, project-specific bugs.)_\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich **Project** is this bug affecting?", 
                         parse_mode="Markdown",
                         reply_markup=reply_markup
                     )
@@ -219,11 +219,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 keyboard = [
                     [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
-                    [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")]
+                    [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
+                    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nDiagnostics active.", parse_mode="Markdown", reply_markup=reply_markup)
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**", parse_mode="Markdown", reply_markup=reply_markup)
                 except: pass
             return
 
@@ -381,6 +382,22 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         await query.answer()
         await query.edit_message_text("🚨 **EMERGENCY FLARE FIRED!**\nGitHub CI/CD has been alerted that ClipFLOW is unresponsive.", parse_mode="Markdown")
+        return
+
+    if query.data == "ping_help":
+        help_text = (
+            "✅ **JULES SYSTEM: ONLINE.**\n\n"
+            "**Tester Guide:**\n"
+            "• Use `📝 Add Logic Comment` for fast feedback.\n"
+            "• Use `🚨 Report Bot Unresponsive` if ClipFLOW is totally dead.\n"
+            "• Type `/ticket` if you need to submit a descriptive bug."
+        )
+        keyboard = [
+            [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
+            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")]
+        ]
+        await query.answer()
+        await query.edit_message_text(help_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     if not query.data.startswith("ticket_proj:"):
