@@ -374,14 +374,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         import requests
         if github_token:
             headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
-            data = {"title": f"🚨 EMERGENCY: ClipFLOW Unresponsive (Reported by @{username})", "body": f"**Status:** Bot is dead / not responding to commands.\n**Reporter:** @{username}", "labels": ["bug", "critical", "pupbot-routed"]}
+            data = {"title": f"🚨 EMERGENCY: Clipsflow Unresponsive (Reported by @{username})", "body": f"**Status:** Bot is dead / not responding to commands.\n**Reporter:** @{username}", "labels": ["bug", "critical", "pupbot-routed"]}
             try:
                 import asyncio
                 await asyncio.to_thread(requests.post, url, headers=headers, json=data)
             except Exception: pass
             
         await query.answer()
-        await query.edit_message_text("🚨 **EMERGENCY FLARE FIRED!**\nGitHub CI/CD has been alerted that ClipFLOW is unresponsive.", parse_mode="Markdown")
+        await query.edit_message_text("🚨 **EMERGENCY FLARE FIRED!**\nGitHub CI/CD has been alerted that Clipsflow is unresponsive.", parse_mode="Markdown")
         return
 
     if query.data == "ping_help":
@@ -389,7 +389,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✅ **JULES SYSTEM: ONLINE.**\n\n"
             "**Tester Guide:**\n"
             "• Use `📝 Add Logic Comment` for fast feedback.\n"
-            "• Use `🚨 Report Bot Unresponsive` if ClipFLOW is totally dead.\n"
+            "• Use `🚨 Report Bot Unresponsive` if Clipsflow is totally dead.\n"
             "• Type `/ticket` if you need to submit a descriptive bug."
         )
         keyboard = [
