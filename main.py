@@ -1,7 +1,7 @@
 import os
 import logging
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CallbackQueryHandler, filters
 import google.generativeai as genai
 
 # Naive load .env
@@ -177,13 +177,34 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_lower == "/ticket":
             if user_id in debuggers:
                 ticket_states[user_id] = "project"
+                
+                keyboard = [
+                    [InlineKeyboardButton("ClipFLOW", callback_data="ticket_proj:ClipFLOW"),
+                     InlineKeyboardButton("Nebulosa", callback_data="ticket_proj:Nebulosa")],
+                    [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
+                     InlineKeyboardButton("Other", callback_data="ticket_proj:Other")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="👔 **Jules Diagnostic Interface**\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich **Project** is this bug affecting? (e.g. ClipFLOW, Nebulosa, Database, Extension)", parse_mode="Markdown")
+                    await context.bot.send_message(
+                        chat_id=chat_id, 
+                        text="👔 **Jules Diagnostic Interface**\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich **Project** is this bug affecting?", 
+                        parse_mode="Markdown",
+                        reply_markup=reply_markup
+                    )
                 except: pass
             else:
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="⛔ Access Denied. You must be an authorized debugger.")
                 except: pass
+            return
+
+        # Start Ticketing
+        if text_lower == "/ping":
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nChanges applied successfully. Try `/ticket`.", parse_mode="Markdown")
+            except: pass
             return
 
         # In-Progress Ticketing
@@ -197,18 +218,19 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             state = ticket_states[user_id]
-            if state == "project":
+            if state == "project_other":
                 ticket_data[user_id] = {"project": text}
                 ticket_states[user_id] = "desc"
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project logged as `{text}`.\n\nNow, please provide a detailed description of the bug.", parse_mode="Markdown")
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to `{text}`.\n\nNow, please provide a detailed description of the bug.", parse_mode="Markdown")
                 except: pass
                 return
             elif state == "desc":
                 project = ticket_data[user_id]["project"]
                 desc = text
                 username = update.effective_user.username or str(user_id)
-                url = "https://api.github.com/repos/FriskyDevelopments/ClipFLOW/issues"
+                # Dynamic Routing based on exact project name matching the Repo Name
+                url = f"https://api.github.com/repos/FriskyDevelopments/{project}/issues"
                 
                 if github_token:
                     headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
@@ -223,7 +245,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 del ticket_states[user_id]
                 ticket_data.pop(user_id, None)
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ **Ticket Submitted!** Routed correctly to GitHub Action pipeline.", parse_mode="Markdown")
+                    await context.bot.send_message(chat_id=chat_id, text=f"✅ **Ticket Submitted!** Successfully routed to `{project}` CI/CD pipeline.", parse_mode="Markdown")
                 except: pass
                 return
 
@@ -295,10 +317,44 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
             return
 
+async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = str(query.from_user.id)
+    chat_id = str(query.message.chat.id)
+    
+    if not query.data.startswith("ticket_proj:"):
+        return
+        
+    if user_id not in ticket_states or ticket_states[user_id] != "project":
+        await query.answer("No active ticket flow or expired menu.", show_alert=True)
+        return
+        
+    repo_name = query.data.split(":", 1)[1]
+    
+    if repo_name == "Other":
+        ticket_states[user_id] = "project_other"
+        await query.answer()
+        await query.edit_message_text(
+            "👔 **Manual Override**\nPlease type the name of the project or repository this bug belongs to:",
+            parse_mode="Markdown"
+        )
+        return
+
+    ticket_data[user_id] = {"project": repo_name}
+    ticket_states[user_id] = "desc"
+    
+    await query.answer()
+    await query.edit_message_text(
+        f"👔 Project locked to `{repo_name}` repository.\n\n"
+        "Now, please provide a detailed description of the bug.",
+        parse_mode="Markdown"
+    )
+
 if __name__ == '__main__':
     threading.Thread(target=snag_engine, daemon=True).start()
     
     app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.ALL, lounge_host))
     
     # 🔥 Firebase / Google Cloud Vercel equivalent hosting logic
