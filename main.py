@@ -179,6 +179,38 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except: pass
             return
 
+        # Command to authorize groups
+        if text_lower == "/authorize_group":
+            if user_id != ALPHA:
+                return
+            
+            import os
+            import subprocess
+            raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
+            authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
+            
+            if chat_id in authorized_groups:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="🐶 This group is already authorized!")
+                except: pass
+                return
+                
+            authorized_groups.append(chat_id)
+            new_list_str = ",".join(authorized_groups)
+            os.environ["AUTHORIZED_GROUPS"] = new_list_str
+            
+            try:
+                subprocess.run(["/opt/homebrew/bin/doppler", "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", "friskyghost", "-c", "dev"], check=True)
+                await context.bot.send_message(chat_id=chat_id, text="✅ **GROUP AUTHORIZED!**\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="Markdown")
+            except Exception as e:
+                try:
+                    with open("/Users/friskypup/gemini-bot/.env", "a") as f:
+                        f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **GROUP AUTHORIZED!**\nAnyone inside this group now has permission to talk to me! Arf!\n*(Local fallback saved)*", parse_mode="Markdown")
+                except Exception as e2:
+                    await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Added to memory, but failed to save permanently: `{e2}`")
+            return
+
         # Antigravity developer mode toggle (Private DM Only, unless bypassed)
         if text_lower == "/antigravity":
             if user_id != ALPHA:
@@ -355,7 +387,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
     
     import random
-    if (user_id == ALPHA or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
+    raw_groups = os.environ.get("AUTHORIZED_GROUPS", "")
+    authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
+    in_auth_group = chat_id in authorized_groups
+    
+    if (user_id == ALPHA or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
         user_text = update.message.text
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
