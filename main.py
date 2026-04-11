@@ -217,10 +217,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nComment successfully relayed to GitHub repository.", parse_mode="Markdown")
                 except: pass
             else:
-                keyboard = [[InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")]]
+                keyboard = [
+                    [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
+                    [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")]
+                ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nChanges applied successfully. Try `/ticket`.", parse_mode="Markdown", reply_markup=reply_markup)
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **JULES SYSTEM: ONLINE.**\nDiagnostics active.", parse_mode="Markdown", reply_markup=reply_markup)
                 except: pass
             return
 
@@ -362,6 +365,22 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👔 **Logic Feedback:**\nPlease type your comment about the logic. It will be logged to GitHub.",
             parse_mode="Markdown"
         )
+        return
+
+    if query.data == "ping_bot_dead":
+        username = update.effective_user.username or user_id
+        url = "https://api.github.com/repos/FriskyDevelopments/ClipFLOW/issues"
+        import requests
+        if github_token:
+            headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
+            data = {"title": f"🚨 EMERGENCY: ClipFLOW Unresponsive (Reported by @{username})", "body": f"**Status:** Bot is dead / not responding to commands.\n**Reporter:** @{username}", "labels": ["bug", "critical", "pupbot-routed"]}
+            try:
+                import asyncio
+                await asyncio.to_thread(requests.post, url, headers=headers, json=data)
+            except Exception: pass
+            
+        await query.answer()
+        await query.edit_message_text("🚨 **EMERGENCY FLARE FIRED!**\nGitHub CI/CD has been alerted that ClipFLOW is unresponsive.", parse_mode="Markdown")
         return
 
     if not query.data.startswith("ticket_proj:"):
