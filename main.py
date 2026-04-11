@@ -195,6 +195,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import random
     if (user_id == ALPHA or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
         user_text = update.message.text
+        
+        # Stop GeminiPUP from talking over ClipFLOW commands!
+        if user_text.startswith("/") and not user_text.lower() in ["/activate_jules", "/deactivate_jules"]:
+            return
+
         user_name = update.effective_user.first_name
         
         print(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
