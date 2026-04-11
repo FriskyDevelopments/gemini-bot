@@ -26,20 +26,18 @@ Your primary goal is to ENERGIZE the room, keep the party highly interactive, an
 Act as the ultimate MC/Party Host: ask playful icebreaker questions, hype up the members, use pup-play terminology naturally (barks, tail wags, whimpers, treats, ear scratches), and start fun conversations!
 If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a legendary pup host!"""
 
-JULES_PROMPT = """You are Jules, an elite, highly intelligent Diagnostic AI and Project Routing Manager.
-Your job is to take bug reports from the developer or users and prepare them for GitHub Issues.
-1. Analyze the user's issue.
-2. If the user does not specify WHICH project the bug affects (e.g., ClipFLOW, Nebulosa, Database, Server, Extension), YOU MUST ACT AS A DIAGNOSTIC AGENT and ask them clarifying questions until they specify the valid project context.
-3. Once you have a clear understanding of the bug and the exact project it belongs to, reply with EXACTLY the following format and nothing else (do not include markdown block quotes):
-[CREATE GITHUB ISSUE: Title: <generate a brief title> Body: <describe the bug thoroughly with the project name>]"""
+import threading
+import time
+import requests
+import os
 
 jules_chats = set()
+debuggers = set([ALPHA])   # Authorized bug submitters
+ticket_states = {}         # user_id -> state
+ticket_data = {}           # user_id -> dict
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN") or os.getenv("GITHUB_TOKEN")
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-import threading
-import time
 
 def snag_engine():
     oci_ad = os.getenv("OCI_AD")
@@ -155,18 +153,79 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except: pass
         return
 
-    # 1.5 COMMAND INTERCEPTION (JULES/BUGS)
+    # 1.5 DETERMINISTIC TICKETING (JULES)
     if update.message.text:
-        command_text = update.message.text.strip().lower()
-        if command_text == "/activate_jules":
-            jules_chats.add(chat_id)
-            await context.bot.send_message(chat_id=chat_id, text="👔 **Jules Diagnostic Mode ACTIVATED.**\nI am now acting as an intelligent routing AI. Describe the bug you are facing, and I will validate the context before pushing it to GitHub Actions.", parse_mode="Markdown")
+        text = update.message.text.strip()
+        text_lower = text.lower()
+        
+        # Command to add debuggers
+        if text_lower.startswith("/add_debugger"):
+            if user_id == ALPHA:
+                parts = text.split()
+                if len(parts) > 1:
+                    debuggers.add(parts[1])
+                    try:
+                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} added to debuggers list.")
+                    except: pass
+                else:
+                    try:
+                         await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>")
+                    except: pass
             return
-        elif command_text == "/deactivate_jules":
-            if chat_id in jules_chats:
-                jules_chats.remove(chat_id)
-            await context.bot.send_message(chat_id=chat_id, text="🛑 **Jules Deactivated.** Returning conversational engine to Pupbot mode.", parse_mode="Markdown")
+
+        # Start Ticketing
+        if text_lower == "/ticket":
+            if user_id in debuggers:
+                ticket_states[user_id] = "project"
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="👔 **Jules Diagnostic Interface**\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich **Project** is this bug affecting? (e.g. ClipFLOW, Nebulosa, Database, Extension)", parse_mode="Markdown")
+                except: pass
+            else:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ Access Denied. You must be an authorized debugger.")
+                except: pass
             return
+
+        # In-Progress Ticketing
+        if user_id in ticket_states:
+            if text_lower == "/cancel":
+                del ticket_states[user_id]
+                ticket_data.pop(user_id, None)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="🛑 Ticketing flow aborted.")
+                except: pass
+                return
+                
+            state = ticket_states[user_id]
+            if state == "project":
+                ticket_data[user_id] = {"project": text}
+                ticket_states[user_id] = "desc"
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project logged as `{text}`.\n\nNow, please provide a detailed description of the bug.", parse_mode="Markdown")
+                except: pass
+                return
+            elif state == "desc":
+                project = ticket_data[user_id]["project"]
+                desc = text
+                username = update.effective_user.username or str(user_id)
+                url = "https://api.github.com/repos/FriskyDevelopments/ClipFLOW/issues"
+                
+                if github_token:
+                    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
+                    data = {"title": f"[{project}] Ticket from @{username}", "body": f"**Project Scope:** {project}\n**Reporter:** @{username}\n\n**Issue Details:**\n{desc}", "labels": ["bug", "pupbot-routed"]}
+                    try:
+                        import asyncio
+                        # requests is synchronous, so wrap in thread
+                        await asyncio.to_thread(requests.post, url, headers=headers, json=data)
+                    except Exception as e: 
+                        print(f"Github push error: {e}")
+                
+                del ticket_states[user_id]
+                ticket_data.pop(user_id, None)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="✅ **Ticket Submitted!** Routed correctly to GitHub Action pipeline.", parse_mode="Markdown")
+                except: pass
+                return
 
     # 2. CHECK FOR SPAMMERS
     if update.message.text:
@@ -196,8 +255,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if (user_id == ALPHA or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
         user_text = update.message.text
         
-        # Stop GeminiPUP from talking over ClipFLOW commands!
-        if user_text.startswith("/") and not user_text.lower() in ["/activate_jules", "/deactivate_jules"]:
+        # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
+        if user_text.startswith("/") and not user_text.startswith("/pup"):
             return
 
         user_name = update.effective_user.first_name
@@ -205,40 +264,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
         
         try:
-            # Tell Gemini who it's talking to
             relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
-            
-            if chat_id in jules_chats:
-                prompt = f"{JULES_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
-            else:
-                prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
+            prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
             
             response = model.generate_content(prompt)
             reply_text = response.text.replace("[DELETE]", "").strip()
-            
-            if chat_id in jules_chats and "[CREATE GITHUB ISSUE:" in reply_text:
-                import re
-                import httpx
-                match = re.search(r"Title:\s*(.*?)\s*Body:\s*(.*)]", reply_text, re.DOTALL | re.IGNORECASE)
-                if match and github_token:
-                    title = match.group(1).strip()
-                    body = match.group(2).strip()
-                    
-                    url = "https://api.github.com/repos/FriskyDevelopments/ClipFLOW/issues"
-                    headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
-                    data = {"title": title, "body": body, "labels": ["bug", "jules-routed"]}
-                    
-                    async with httpx.AsyncClient() as client:
-                        await client.post(url, headers=headers, json=data)
-                        
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 **Jules:** Issue validated and successfully routed to GitHub CI/CD pipeline!\n\n**Ticket Details:**\n{title}", parse_mode="Markdown")
-                else:
-                    await context.bot.send_message(chat_id=chat_id, text="👔 **Jules:** Error parsing the ticket or missing GitHub Token. Check server logs.", parse_mode="Markdown")
-                return
 
             if reply_text:
-                if chat_id in jules_chats and not reply_text.startswith("👔"):
-                    reply_text = f"👔 **Jules:**\n{reply_text}"
                 await context.bot.send_message(chat_id=chat_id, text=reply_text, reply_to_message_id=update.message.message_id)
                 print(f"✅ AI responded back to {user_name} successfully.")
         except Exception as e:
