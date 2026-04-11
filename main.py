@@ -179,7 +179,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_states[user_id] = "project"
                 
                 keyboard = [
-                    [InlineKeyboardButton("ClipFLOW", callback_data="ticket_proj:ClipFLOW"),
+                    [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
                      InlineKeyboardButton("Nebulosa", callback_data="ticket_proj:Nebulosa")],
                     [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
                      InlineKeyboardButton("Other", callback_data="ticket_proj:Other")]
