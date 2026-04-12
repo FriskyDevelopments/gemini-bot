@@ -232,7 +232,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             try:
                 await context.bot.send_message(chat_id=chat_id, text=menu_text, parse_mode="HTML")
-            except Exception as e: logging.debug(f"Ignored error: {e}")
+            except Exception as e:
+                import logging
+                logging.error(f"Menu formatting crash: {e}")
+                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: {e}")
             return
 
         # Command to add debuggers
