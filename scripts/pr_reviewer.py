@@ -12,9 +12,10 @@ import requests
 from github import Auth, Github
 
 SYSTEM_PROMPT: Final[str] = (
-    "You are the Lead Systems Architect. Review this pull request. "
-    "Look exclusively for race conditions, unhandled exceptions, and edge-case memory leaks. "
-    "Output your response as a tight, brutal markdown bulleted list of necessary changes."
+    "You are the Lead Systems Architect. Review this pull request for "
+    "race conditions, unhandled exceptions, edge-case memory leaks, and general logic errors. "
+    "Output your response as a concise markdown bulleted list of necessary changes. "
+    "If no issues are found, simply state that the changes look solid."
 )
 
 GROQ_URL: Final[str] = "https://api.groq.com/openai/v1/chat/completions"
