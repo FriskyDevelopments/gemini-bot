@@ -211,21 +211,27 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Command to display the Menu
         if text_lower == "/menu" or text_lower == "/help":
             menu_text = (
-                "🐾 **PUPBOT COMMAND CENTER** 🐾\n\n"
-                "**🎭 Personas & Modes**\n"
-                "`/alchemy` - Summon the Λlchemy Curator Wizard\n"
-                "`/antigravity` - Summon the Antigravity Developer Core\n\n"
-                "**🛠️ System & Debugging**\n"
-                "`/ticket` - Open the Jules Bug Reporter (GitHub CI/CD)\n"
-                "`/ping` - Quick feedback & Help Menu\n"
-                "`/ping <message>` - Send instant feedback to Devs\n\n"
-                "**🔐 Alpha / Admin Only**\n"
-                "`/authorize_group` - Allow Pupbot to speak in this chat\n"
-                "`/add_debugger <id>` - Grant a user Bug Reporter access\n\n"
-                "_Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast._"
+                "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
+                "<b>🎭 Personas & Modes</b>\n"
+                "<blockquote>"
+                "<code>/alchemy</code> - Summon the Λlchemy Curator Wizard\n"
+                "<code>/antigravity</code> - Summon the Antigravity Developer Core"
+                "</blockquote>\n"
+                "<b>🛠️ System & Debugging</b>\n"
+                "<blockquote>"
+                "<code>/ticket</code> - Open the Jules Bug Reporter\n"
+                "<code>/ping</code> - Quick feedback & Help Menu\n"
+                "<code>/ping &lt;msg&gt;</code> - Send instant feedback"
+                "</blockquote>\n"
+                "<b>🔐 Alpha / Admin Only</b>\n"
+                "<blockquote>"
+                "<code>/authorize_group</code> - Allow Pupbot to speak\n"
+                "<code>/add_debugger &lt;id&gt;</code> - Grant Reporter access"
+                "</blockquote>\n"
+                "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>"
             )
             try:
-                await context.bot.send_message(chat_id=chat_id, text=menu_text, parse_mode="Markdown")
+                await context.bot.send_message(chat_id=chat_id, text=menu_text, parse_mode="HTML")
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
