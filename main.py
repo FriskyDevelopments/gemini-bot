@@ -600,17 +600,33 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
 
             if reply_text:
-                # ── 🔊 TTS Voice Reply (Groq PlayAI) ─────────────────────────── #
+                import re
+                
+                # ── Format Gemini Markdown to Telegram HTML ── #
+                formatted_text = reply_text
+                # Convert Headers (## Text) -> Bold Headers
+                formatted_text = re.sub(r'(?m)^#+\s+(.*?)$', r'<b>\1</b>', formatted_text)
+                # Convert Bold (**text**) -> <b>text</b>
+                formatted_text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', formatted_text)
+                # Convert Italics (*text*) -> <i>text</i> - Ignore bullet points which have spaces!
+                formatted_text = re.sub(r'(?<!\s)\*(.*?)\*(?!\s)', r'<i>\1</i>', formatted_text)
+                # Convert bullet points (* or -) 
+                formatted_text = re.sub(r'(?m)^(\s*)[*+-]\s+', r'\1• ', formatted_text)
+                # Convert Horizontal Rules (---)
+                formatted_text = re.sub(r'(?m)^\s*---\s*$', r'━━━━━━━━━━━━━━━', formatted_text)
+                # Escape unhandled < and > symbols to prevent HTML parse crashes
+                # We skip this for now since we generated exact HTML tags above.
+                
+                # ── 🔊 TTS Voice Reply (Groq PlayAI) ── #
                 voice_sent = False
                 try:
                     import httpx, io
                     await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
-                    # Strip markdown symbols for cleaner TTS audio
                     tts_text = reply_text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")[:4096]
                     async with httpx.AsyncClient(timeout=30) as tts_client:
                         tts_resp = await tts_client.post(
                             "https://api.groq.com/openai/v1/audio/speech",
-                            headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
+                            headers={"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}", "Content-Type": "application/json"},
                             json={"model": "playai-tts", "input": tts_text, "voice": "Fritz-PlayAI", "response_format": "wav"}
                         )
                         tts_resp.raise_for_status()
@@ -622,17 +638,31 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as tts_err:
                     logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
 
-                # Always send text too (readable on desktop / if voice failed)
+                # Always send text too
                 if not voice_sent:
-                    max_len = 4000
-                    for i in range(0, len(reply_text), max_len):
-                        chunk = reply_text[i:i+max_len]
-                        if i == 0:
-                            await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
+                    # Smart paragraph chunker to avoid cutting middle of words or HTML tags
+                    paragraphs = formatted_text.split('\n')
+                    chunks = []
+                    current_chunk = ""
+                    for p in paragraphs:
+                        if len(current_chunk) + len(p) + 1 > 3900:
+                            if current_chunk: chunks.append(current_chunk.strip())
+                            current_chunk = p + "\n"
                         else:
+                            current_chunk += p + "\n"
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                    
+                    for i, chunk in enumerate(chunks):
+                        try:
+                            if i == 0:
+                                await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id, parse_mode="HTML")
+                            else:
+                                await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="HTML")
+                        except Exception as parse_e:
+                            # Fallback if HTML parser crashes
                             await context.bot.send_message(chat_id=chat_id, text=chunk)
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
-                # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
             error_msg = f"❌ <b>AI Engine Fault:</b> <code>{e}</code>"
             try:
