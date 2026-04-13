@@ -28,6 +28,7 @@ except Exception as e:
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 ALPHA = os.getenv("ALPHA_USER_ID", "8091939499")
+EXTRA_ALPHAS = ["7758239683"]
 ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
@@ -243,7 +244,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Command to add debuggers
         if text_lower.startswith("/add_debugger"):
-            if user_id == ALPHA:
+            if user_id == ALPHA or user_id in EXTRA_ALPHAS:
                 parts = text.split()
                 if len(parts) > 1:
                     debuggers.add(parts[1])
@@ -259,7 +260,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Command to authorize groups
         if text_lower == "/authorize_group":
-            if user_id != ALPHA:
+            if user_id != ALPHA and user_id not in EXTRA_ALPHAS:
                 return
             
             raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
@@ -290,7 +291,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Antigravity developer mode toggle (Private DM Only, unless bypassed)
         if text_lower == "/antigravity":
-            if user_id != ALPHA:
+            if user_id != ALPHA and user_id not in EXTRA_ALPHAS:
                 return
                 
             if chat_id in antigravity_chats:
@@ -318,7 +319,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Alchemy Wizard Mode Toggle
         if text_lower == "/alchemy":
-            if user_id != ALPHA:
+            if user_id != ALPHA and user_id not in EXTRA_ALPHAS:
                 return
                 
             if chat_id in alchemy_chats:
@@ -568,7 +569,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
     in_auth_group = chat_id in authorized_groups
     
-    if (user_id == ALPHA or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
+    if (user_id == ALPHA or user_id in EXTRA_ALPHAS or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
         user_text = update.message.text
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
@@ -629,7 +630,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 4. ADMIN RULE REMINDER
-    if (chat_id == ADMIN_LOUNGE_ID or user_id == ALPHA) and update.message.text:
+    if (chat_id == ADMIN_LOUNGE_ID or user_id == ALPHA or user_id in EXTRA_ALPHAS) and update.message.text:
         if "remind the group of the rules" in update.message.text.lower():
             if MAIN_GROUP_ID:
                 try:
