@@ -590,7 +590,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             import google.generativeai as genai
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-1.5-flash-latest", system_instruction=active_system_prompt)
+            model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
             response = await model.generate_content_async(prompt)
             
             # Catch safety blocking
