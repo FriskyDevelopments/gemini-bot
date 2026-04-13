@@ -468,7 +468,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if text_lower == "ghost":
+                if "ghost" in text_lower:
                     antigravity_chats.add(chat_id)
                     del ticket_states[user_id]
                     save_state()
@@ -479,7 +479,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     del ticket_states[user_id]
                     save_state()
                     try:
-                        await context.bot.send_message(chat_id=chat_id, text="⛔ **Access Denied.** Incorrect bypass password. Returning to standard operations.", parse_mode="Markdown")
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ **Access Denied.** Incorrect bypass password. Returning to standard operations. (Tip: Type /antigravity to try again)", parse_mode="Markdown")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "ping_comment_entry":
