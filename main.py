@@ -624,7 +624,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 # Always send text too (readable on desktop / if voice failed)
                 if not voice_sent:
-                    await context.bot.send_message(chat_id=chat_id, text=reply_text, reply_to_message_id=update.message.message_id)
+                    max_len = 4000
+                    for i in range(0, len(reply_text), max_len):
+                        chunk = reply_text[i:i+max_len]
+                        if i == 0:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
+                        else:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk)
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
                 # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
