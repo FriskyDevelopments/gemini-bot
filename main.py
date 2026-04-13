@@ -213,26 +213,19 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text.strip()
         text_lower = text.lower()
         
-        # Command to display the Menu
         if text_lower == "/menu" or text_lower == "/help":
             menu_text = (
                 "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
                 "<b>🎭 Personas & Modes</b>\n"
-                "<blockquote>"
-                "<code>/alchemy</code> - Summon the Λlchemy Curator Wizard\n"
-                "<code>/antigravity</code> - Summon the Antigravity Developer Core"
-                "</blockquote>\n"
+                "  • <code>/alchemy</code> - Summon the Λlchemy Curator Wizard\n"
+                "  • <code>/antigravity</code> - Summon the Antigravity Developer Core\n\n"
                 "<b>🛠️ System & Debugging</b>\n"
-                "<blockquote>"
-                "<code>/ticket</code> - Open the Jules Bug Reporter\n"
-                "<code>/ping</code> - Quick feedback & Help Menu\n"
-                "<code>/ping &lt;msg&gt;</code> - Send instant feedback"
-                "</blockquote>\n"
+                "  • <code>/ticket</code> - Open the Jules Bug Reporter\n"
+                "  • <code>/ping</code> - Quick feedback & Help Menu\n"
+                "  • <code>/ping &lt;msg&gt;</code> - Send instant feedback\n\n"
                 "<b>🔐 Alpha / Admin Only</b>\n"
-                "<blockquote>"
-                "<code>/authorize_group</code> - Allow Pupbot to speak\n"
-                "<code>/add_debugger &lt;id&gt;</code> - Grant Reporter access"
-                "</blockquote>\n"
+                "  • <code>/authorize_group</code> - Allow Pupbot to speak\n"
+                "  • <code>/add_debugger &lt;id&gt;</code> - Grant Reporter access\n\n"
                 "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>"
             )
             try:
