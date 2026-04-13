@@ -263,6 +263,22 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except: pass
             return
 
+        # Help & Start Commands
+        if text_lower == "/help" or text_lower == "/start":
+            help_msg = (
+                "🐾 **Pupbot & Jules System Help** 🐾\n\n"
+                "Welcome to the **Pup Lounge**! I'm your charismatic host, **Pupbot**! 🥂\n\n"
+                "**Common Commands:**\n"
+                "• `/ping <message>` - Send logic feedback to my developers.\n"
+                "• `/ticket` - (Authorized Only) Submit detailed bug reports.\n"
+                "• `/help` - Show this paw-some guide again!\n\n"
+                "Feel free to just chat with me! I'm always ready for a bark and some play. Arf! 🐶✨"
+            )
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=help_msg, parse_mode="Markdown")
+            except: pass
+            return
+
         # Start Ticketing
         if text_lower.startswith("/ping"):
             comment = text[5:].strip()
@@ -410,11 +426,27 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
                 prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
             
+            # 🎨 Palette: Add typing indicator for better UX
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
             response = model.generate_content(prompt)
             reply_text = response.text.replace("[DELETE]", "").strip()
 
             if reply_text:
-                await context.bot.send_message(chat_id=chat_id, text=reply_text, reply_to_message_id=update.message.message_id)
+                # 🎨 Palette: Attempt Markdown for richer responses, fallback to plain text if invalid
+                try:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=reply_text,
+                        reply_to_message_id=update.message.message_id,
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=reply_text,
+                        reply_to_message_id=update.message.message_id
+                    )
                 print(f"✅ AI responded back to {user_name} successfully.")
         except Exception as e:
             print(f"❌ ERROR: I tried to respond but Telegram stopped me: {e}")
