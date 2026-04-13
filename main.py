@@ -665,7 +665,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             await context.bot.send_message(chat_id=chat_id, text=chunk)
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
         except Exception as e:
-            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{e}</code>"
+            import html
+            safe_error = html.escape(str(e))
+            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{safe_error}</code>"
             try:
                 await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode="HTML")
             except: pass
