@@ -1,5 +1,8 @@
 import os
 import requests
+import hmac
+import hashlib
+import re
 from flask import Flask, request, jsonify
 import google.generativeai as genai
 
@@ -13,12 +16,39 @@ except Exception as e:
     print(f"Failed to initialize Gemini: {e}")
 
 GITHUB_TOKEN = os.environ.get("GITHUB_PUPBOT_TOKEN")
+GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET")
+
+def verify_signature(payload_body, signature_header):
+    """Verify that the payload was sent from GitHub by validating SHA256 HMAC."""
+    if not GITHUB_WEBHOOK_SECRET:
+        # In production, this should be mandatory. For now, we warn.
+        print("Warning: GITHUB_WEBHOOK_SECRET not set. Skipping signature verification.")
+        return True
+
+    if not signature_header:
+        return False
+
+    hash_object = hmac.new(GITHUB_WEBHOOK_SECRET.encode('utf-8'), msg=payload_body, digestmod=hashlib.sha256)
+    expected_signature = "sha256=" + hash_object.hexdigest()
+
+    return hmac.compare_digest(expected_signature, signature_header)
 
 @app.route("/", methods=["GET"])
 def index():
     return "Codepup GitHub Webhook is listening! Arf!"
 
 def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=False):
+    # Security: Validate GitHub URLs to prevent SSRF
+    allowed_prefixes = ("https://api.github.com/", "https://github.com/")
+    if not any(diff_url_or_api.startswith(prefix) for prefix in allowed_prefixes):
+        print(f"Aborting: diff_url_or_api '{diff_url_or_api}' does not start with an allowed GitHub prefix.")
+        return False
+
+    # Security: Validate repo_full_name format (owner/repo)
+    if not re.match(r"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$", repo_full_name):
+        print(f"Aborting: repo_full_name '{repo_full_name}' is invalid.")
+        return False
+
     headers = {}
     if GITHUB_TOKEN:
         headers['Authorization'] = f"token {GITHUB_TOKEN}"
@@ -72,6 +102,12 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
 
 @app.route("/github-webhook", methods=["POST"])
 def github_webhook():
+    signature = request.headers.get('X-Hub-Signature-256')
+    payload_body = request.get_data()
+
+    if not verify_signature(payload_body, signature):
+        return jsonify({"error": "Invalid signature"}), 403
+
     event = request.headers.get('X-GitHub-Event')
     payload = request.json
 
