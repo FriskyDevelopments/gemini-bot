@@ -1,5 +1,6 @@
 import os
 import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 import threading
 import time
 import requests
@@ -608,7 +609,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
                     json={
-                        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                        "model": "llama-3.3-70b-versatile",
                         "messages": messages
                     },
                     timeout=30.0
