@@ -324,6 +324,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             alchemy_chats.add(chat_id)
+            if chat_id in antigravity_chats: antigravity_chats.remove(chat_id)
             save_state()
             try:
                 await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML")
