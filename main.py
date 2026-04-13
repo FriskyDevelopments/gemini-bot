@@ -3,10 +3,16 @@ import logging
 import threading
 import time
 import requests
+import asyncio
+import json
+import random
+import subprocess
+import urllib.request
+import urllib.parse
+import io
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CallbackQueryHandler, filters
-from openai import AsyncOpenAI
 
 # Naive load .env
 env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -25,7 +31,6 @@ ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
-groq_client = AsyncOpenAI(api_key=groq_api_key, base_url="https://api.groq.com/openai/v1") if groq_api_key else None
 
 SYSTEM_PROMPT = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'! 
 This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle. 
@@ -144,7 +149,6 @@ def snag_engine():
             response = compute_client.launch_instance(instance_details)
             logging.info("✅ MISSION SUCCESS: Bunker Secured!")
             
-            import urllib.request, urllib.parse
             token = os.getenv("TELEGRAM_TOKEN")
             msg = f"🐾 [ PUP BOT ] : BUNKER SECURED.\\n\\nNode: {oci_ad}\\nStatus: Operational"
             url = f"https://api.telegram.org/bot{token}/sendMessage"
@@ -167,7 +171,6 @@ def snag_engine():
         except Exception as e:
             logging.info(f"❓ Unknown Error: {e}")
             
-        import random
         sleep_time = 15 + random.randint(0, 10)
         time.sleep(sleep_time)
 # Load banned words for spammer detection
@@ -233,7 +236,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_message(chat_id=chat_id, text=menu_text, parse_mode="HTML")
             except Exception as e:
-                import logging
                 logging.error(f"Menu formatting crash: {e}")
                 await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: {e}")
             return
@@ -259,8 +261,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_id != ALPHA:
                 return
             
-            import os
-            import subprocess
             raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
             authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
             
@@ -397,7 +397,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "promo" in text_lower and str(chat_id) == str(ADMIN_LOUNGE_ID):
             try:
                 await context.bot.send_message(chat_id=chat_id, text="🐾 *Wags aggressively* Acknowledged, Master! Generating Omni-Channel Promo blast...", parse_mode="Markdown")
-                import asyncio, json
                 
                 # 1. AI Generation Layer
                 promo_prompt = (
@@ -408,12 +407,21 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     {"role": "system", "content": "You are a master vaporwave copywriter. Only output valid JSON."},
                     {"role": "user", "content": promo_prompt}
                 ]
-                response = await groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=messages,
-                    response_format={"type": "json_object"}
-                )
-                promo_data = json.loads(response.choices[0].message.content)
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
+                        json={
+                            "model": "llama-3.3-70b-versatile",
+                            "messages": messages,
+                            "response_format": {"type": "json_object"}
+                        },
+                        timeout=30.0
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                promo_data = json.loads(data["choices"][0]["message"]["content"])
                 
                 # 2. Telegram Channel Pipeline
                 if MAIN_GROUP_ID:
@@ -564,7 +572,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
     
-    import random
     raw_groups = os.environ.get("AUTHORIZED_GROUPS", "")
     authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
     in_auth_group = chat_id in authorized_groups
@@ -594,11 +601,22 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ]
-            response = await groq_client.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct",
-                messages=messages
-            )
-            reply_text = response.choices[0].message.content.replace("[DELETE]", "").strip()
+            
+            import httpx
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                        "messages": messages
+                    },
+                    timeout=30.0
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            
+            reply_text = data["choices"][0]["message"]["content"].replace("[DELETE]", "").strip()
 
             if reply_text:
                 # ── 🔊 TTS Voice Reply (Groq PlayAI) ─────────────────────────── #
