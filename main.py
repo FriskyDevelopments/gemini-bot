@@ -404,25 +404,16 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Generate three different variations of a high-conversion, vaporwave-styled promotional message urging free users to buy 'Clipsflow PRO' credits. "
                     "Keep it to 280 characters max. Output exactly as a JSON dictionary: {\"dm_promo\": \"...\", \"channel_promo\": \"...\", \"twitter_promo\": \"...\"}."
                 )
-                messages = [
-                    {"role": "system", "content": "You are a master vaporwave copywriter. Only output valid JSON."},
-                    {"role": "user", "content": promo_prompt}
-                ]
-                import httpx
-                async with httpx.AsyncClient() as client:
-                    resp = await client.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
-                        json={
-                            "model": "llama-3.3-70b-versatile",
-                            "messages": messages,
-                            "response_format": {"type": "json_object"}
-                        },
-                        timeout=30.0
-                    )
-                    resp.raise_for_status()
-                    data = resp.json()
-                promo_data = json.loads(data["choices"][0]["message"]["content"])
+                import google.generativeai as genai
+                gemini_key = os.getenv("GEMINI_API_KEY")
+                genai.configure(api_key=gemini_key)
+                model = genai.GenerativeModel(
+                    "gemini-1.5-flash",
+                    system_instruction="You are a master vaporwave copywriter. Only output valid JSON.",
+                    generation_config=genai.types.GenerationConfig(response_mime_type="application/json")
+                )
+                response = await model.generate_content_async(promo_prompt)
+                promo_data = json.loads(response.text)
                 
                 # 2. Telegram Channel Pipeline
                 if MAIN_GROUP_ID:
@@ -598,26 +589,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
                 prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
             
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ]
-            
-            import httpx
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
-                    json={
-                        "model": "llama-3.3-70b-versatile",
-                        "messages": messages
-                    },
-                    timeout=30.0
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            
-            reply_text = data["choices"][0]["message"]["content"].replace("[DELETE]", "").strip()
+            import google.generativeai as genai
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            genai.configure(api_key=gemini_key)
+            model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=SYSTEM_PROMPT)
+            response = await model.generate_content_async(prompt)
+            reply_text = response.text.replace("[DELETE]", "").strip()
 
             if reply_text:
                 # ── 🔊 TTS Voice Reply (Groq PlayAI) ─────────────────────────── #
