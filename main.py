@@ -408,7 +408,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 gemini_key = os.getenv("GEMINI_API_KEY")
                 genai.configure(api_key=gemini_key)
                 model = genai.GenerativeModel(
-                    "gemini-1.5-flash",
+                    "gemini-1.5-flash-latest",
                     system_instruction="You are a master vaporwave copywriter. Only output valid JSON.",
                     generation_config=genai.types.GenerationConfig(response_mime_type="application/json")
                 )
@@ -592,7 +592,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             import google.generativeai as genai
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=SYSTEM_PROMPT)
+            model = genai.GenerativeModel("gemini-1.5-flash-latest", system_instruction=SYSTEM_PROMPT)
             response = await model.generate_content_async(prompt)
             reply_text = response.text.replace("[DELETE]", "").strip()
 
