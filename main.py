@@ -575,9 +575,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             # Check if this chat is in antigravity mode (applies to ALL messages in the chat if active)
+            active_system_prompt = SYSTEM_PROMPT
+            
             if chat_id in antigravity_chats:
+                active_system_prompt = ANTIGRAVITY_PROMPT
                 prompt = f"{ANTIGRAVITY_PROMPT}\nUser: {user_name} ({user_id})\nMessage: {user_text}"
             elif chat_id in alchemy_chats:
+                active_system_prompt = ALCHEMY_PROMPT
                 prompt = f"{ALCHEMY_PROMPT}\nUser: {user_name} ({user_id})\nMessage: {user_text}"
             else:
                 relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
@@ -586,9 +590,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             import google.generativeai as genai
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-1.5-flash-latest", system_instruction=SYSTEM_PROMPT)
+            model = genai.GenerativeModel("gemini-1.5-flash-latest", system_instruction=active_system_prompt)
             response = await model.generate_content_async(prompt)
-            reply_text = response.text.replace("[DELETE]", "").strip()
+            
+            # Catch safety blocking
+            try:
+                reply_text = response.text.replace("[DELETE]", "").strip()
+            except ValueError as ve:
+                reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
 
             if reply_text:
                 # ── 🔊 TTS Voice Reply (Groq PlayAI) ─────────────────────────── #
@@ -619,6 +628,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
                 # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
+            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{e}</code>"
+            try:
+                await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode="HTML")
+            except: pass
             logging.info(f"❌ ERROR: I tried to respond but Telegram stopped me: {e}")
         return
 
