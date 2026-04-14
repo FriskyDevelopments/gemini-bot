@@ -109,7 +109,9 @@ def github_webhook():
         return jsonify({"error": "Invalid signature"}), 403
 
     event = request.headers.get('X-GitHub-Event')
-    payload = request.json
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"error": "Invalid JSON payload"}), 400
 
     print(f"Received GitHub Webhook: {event}")
 
