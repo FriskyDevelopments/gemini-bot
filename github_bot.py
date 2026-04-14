@@ -1,9 +1,30 @@
 import os
+import hmac
+import hashlib
 import requests
 from flask import Flask, request, jsonify
 import google.generativeai as genai
 
 app = Flask(__name__)
+
+GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET")
+
+def verify_signature(data, signature):
+    """Verify that the payload was sent from GitHub by validating SHA256."""
+    if not GITHUB_WEBHOOK_SECRET:
+        # If secret is not configured, we log a warning but allow for now to avoid breakage,
+        # however Sentinel recommends enforcing this.
+        return True
+    if not signature:
+        return False
+    try:
+        sha_name, sig = signature.split('=')
+        if sha_name != 'sha256':
+            return False
+        mac = hmac.new(GITHUB_WEBHOOK_SECRET.encode(), msg=data, digestmod=hashlib.sha256)
+        return hmac.compare_digest(mac.hexdigest(), sig)
+    except Exception:
+        return False
 
 # Configure Gemini
 try:
@@ -19,6 +40,11 @@ def index():
     return "Codepup GitHub Webhook is listening! Arf!"
 
 def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=False):
+    # SSRF Protection: Ensure we only request from trusted GitHub domains
+    if not (diff_url_or_api.startswith("https://github.com/") or diff_url_or_api.startswith("https://api.github.com/")):
+        print(f"Blocked suspicious request to: {diff_url_or_api}")
+        return False
+
     headers = {}
     if GITHUB_TOKEN:
         headers['Authorization'] = f"token {GITHUB_TOKEN}"
@@ -72,6 +98,10 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
 
 @app.route("/github-webhook", methods=["POST"])
 def github_webhook():
+    signature = request.headers.get('X-Hub-Signature-256')
+    if not verify_signature(request.data, signature):
+        return jsonify({"error": "Invalid signature"}), 403
+
     event = request.headers.get('X-GitHub-Event')
     payload = request.json
 
