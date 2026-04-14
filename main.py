@@ -470,7 +470,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
                 if "ghost" in text_lower:
+                    try:
+                        await update.message.delete()
+                    except: pass
+                    
                     antigravity_chats.add(chat_id)
+                    if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
                     del ticket_states[user_id]
                     save_state()
                     try:
