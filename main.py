@@ -213,7 +213,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text.strip()
         text_lower = text.lower()
         
-        if text_lower == "/menu" or text_lower == "/help":
+        if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
             menu_text = (
                 "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
                 "<b>🎭 Personas & Modes</b>\n"
@@ -340,7 +340,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
                      InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
                     [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
-                     InlineKeyboardButton("Other", callback_data="ticket_proj:Other")]
+                     InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
+                    [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
@@ -591,6 +592,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             response = await model.generate_content_async(prompt)
             
             # Catch safety blocking
@@ -627,10 +629,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     max_len = 4000
                     for i in range(0, len(reply_text), max_len):
                         chunk = reply_text[i:i+max_len]
-                        if i == 0:
-                            await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
-                        else:
-                            await context.bot.send_message(chat_id=chat_id, text=chunk)
+                        try:
+                            if i == 0:
+                                await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id, parse_mode="Markdown")
+                            else:
+                                await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
+                        except Exception as md_err:
+                            logging.warning(f"Markdown failed, falling back to plain text: {md_err}")
+                            if i == 0:
+                                await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
+                            else:
+                                await context.bot.send_message(chat_id=chat_id, text=chunk)
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
                 # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
@@ -706,6 +715,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.answer()
         await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    if query.data == "ticket_cancel":
+        ticket_states.pop(user_id, None)
+        ticket_data.pop(user_id, None)
+        save_state()
+        await query.answer()
+        await query.edit_message_text("🛑 Ticketing flow cancelled.")
         return
 
     if not query.data.startswith("ticket_proj:"):
