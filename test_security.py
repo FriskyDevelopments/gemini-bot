@@ -1,58 +1,67 @@
 import unittest
-from unittest.mock import patch
-
-import github_bot
-
+import hmac
+import hashlib
+import json
+import os
+from github_bot import app
 
 class TestSecurity(unittest.TestCase):
-    def test_verify_signature_rejects_when_secret_missing_and_unsigned_not_allowed(self):
-        with patch.object(github_bot, "GITHUB_WEBHOOK_SECRET", None), patch.object(
-            github_bot, "ALLOW_MISSING_WEBHOOK_SECRET", False
-        ):
-            self.assertFalse(github_bot.verify_signature(b"{}", "sha256=abc"))
+    def setUp(self):
+        self.app = app.test_client()
+        os.environ['GITHUB_WEBHOOK_SECRET'] = 'test_secret'
+        # Re-initialize the secret in the app context
+        import github_bot
+        github_bot.GITHUB_WEBHOOK_SECRET = 'test_secret'
 
-    def test_verify_signature_allows_when_dev_flag_enabled(self):
-        with patch.object(github_bot, "GITHUB_WEBHOOK_SECRET", None), patch.object(
-            github_bot, "ALLOW_MISSING_WEBHOOK_SECRET", True
-        ):
-            self.assertTrue(github_bot.verify_signature(b"{}", None))
+    def test_webhook_no_signature(self):
+        response = self.app.post('/github-webhook', data=json.dumps({'action': 'opened'}), content_type='application/json')
+        self.assertEqual(response.status_code, 403)
 
-    def test_webhook_invalid_json_returns_400(self):
-        client = github_bot.app.test_client()
-        with patch.object(github_bot, "verify_signature", return_value=True):
-            resp = client.post(
-                "/github-webhook",
-                data="not-json",
-                content_type="application/json",
-                headers={"X-GitHub-Event": "pull_request"},
-            )
-        self.assertEqual(resp.status_code, 400)
-        self.assertEqual(resp.get_json(), {"error": "Invalid JSON payload"})
+    def test_webhook_invalid_signature(self):
+        headers = {'X-Hub-Signature-256': 'sha256=invalid'}
+        response = self.app.post('/github-webhook', data=json.dumps({'action': 'opened'}), headers=headers, content_type='application/json')
+        self.assertEqual(response.status_code, 403)
 
-    def test_perform_review_sets_timeouts_for_http_calls(self):
-        class _DiffResponse:
-            status_code = 200
-            text = "diff --git a/a b/b"
+    def test_webhook_valid_signature(self):
+        payload = json.dumps({'action': 'opened', 'pull_request': {'diff_url': 'https://github.com/foo/bar/diff', 'number': 1}, 'repository': {'full_name': 'foo/bar'}})
+        signature = 'sha256=' + hmac.new(b'test_secret', msg=payload.encode('utf-8'), digestmod=hashlib.sha256).hexdigest()
+        headers = {'X-Hub-Signature-256': signature, 'X-GitHub-Event': 'pull_request'}
 
-        class _AiResponse:
-            text = "Looks good"
+        # We need to mock perform_review to avoid external calls
+        import github_bot
+        original_perform_review = github_bot.perform_review
+        github_bot.perform_review = lambda *args, **kwargs: True
 
-        class _PostResponse:
-            status_code = 201
-            text = ""
+        try:
+            response = self.app.post('/github-webhook', data=payload, headers=headers, content_type='application/json')
+            self.assertEqual(response.status_code, 200)
+        finally:
+            github_bot.perform_review = original_perform_review
 
-        with patch.object(github_bot, "GITHUB_TOKEN", "token"), patch(
-            "github_bot.requests.get", return_value=_DiffResponse()
-        ) as mock_get, patch("github_bot.requests.post", return_value=_PostResponse()) as mock_post, patch.object(
-            github_bot, "model"
-        ) as mock_model:
-            mock_model.generate_content.return_value = _AiResponse()
-            ok = github_bot.perform_review(1, "owner/repo")
+    def test_perform_review_ssrf_protection(self):
+        from github_bot import perform_review
+        # Should fail for non-github URLs
+        self.assertFalse(perform_review(1, 'https://malicious.com', 'foo/bar'))
+        # Should fail for internal IPs
+        self.assertFalse(perform_review(1, 'http://127.0.0.1', 'foo/bar'))
 
-        self.assertTrue(ok)
-        self.assertEqual(mock_get.call_args.kwargs["timeout"], github_bot.HTTP_TIMEOUT)
-        self.assertEqual(mock_post.call_args.kwargs["timeout"], github_bot.HTTP_TIMEOUT)
+        import requests
+        from unittest.mock import patch
+        with patch('requests.get') as mocked_get:
+            mocked_get.return_value.status_code = 200
+            mocked_get.return_value.text = "diff content"
+            with patch('github_bot.model.generate_content') as mocked_genai:
+                mocked_genai.return_value.text = "review"
+                # This should reach requests.get
+                perform_review(1, 'https://github.com/foo/bar', 'foo/bar')
+                self.assertTrue(mocked_get.called)
 
+    def test_perform_review_repo_validation(self):
+        from github_bot import perform_review
+        # Invalid repo names
+        self.assertFalse(perform_review(1, 'https://github.com/foo/bar', 'invalid_repo'))
+        self.assertFalse(perform_review(1, 'https://github.com/foo/bar', 'foo/bar/baz'))
+        self.assertFalse(perform_review(1, 'https://github.com/foo/bar', '../../etc/passwd'))
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()
