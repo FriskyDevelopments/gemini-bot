@@ -17,13 +17,13 @@ except Exception as e:
 
 GITHUB_TOKEN = os.environ.get("GITHUB_PUPBOT_TOKEN")
 GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET")
-ALLOW_UNSIGNED_WEBHOOKS = os.environ.get("ALLOW_UNSIGNED_WEBHOOKS", "").lower() == "true"
+ALLOW_MISSING_WEBHOOK_SECRET = os.environ.get("ALLOW_UNSIGNED_WEBHOOKS", "").lower() == "true"
 HTTP_TIMEOUT = (5, 20)
 
 def verify_signature(payload_body, signature_header):
     """Verify that the payload was sent from GitHub by validating SHA256 HMAC."""
     if not GITHUB_WEBHOOK_SECRET:
-        if ALLOW_UNSIGNED_WEBHOOKS:
+        if ALLOW_MISSING_WEBHOOK_SECRET:
             print("Warning: GITHUB_WEBHOOK_SECRET not set. Unsigned webhooks allowed by configuration.")
             return True
         print("Error: GITHUB_WEBHOOK_SECRET not set. Rejecting webhook.")
@@ -41,25 +41,20 @@ def verify_signature(payload_body, signature_header):
 def index():
     return "Codepup GitHub Webhook is listening! Arf!"
 
-def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=False):
-    # Security: Validate GitHub URLs to prevent SSRF
-    allowed_prefixes = ("https://api.github.com/", "https://github.com/")
-    if not any(diff_url_or_api.startswith(prefix) for prefix in allowed_prefixes):
-        print(f"Aborting: diff_url_or_api '{diff_url_or_api}' does not start with an allowed GitHub prefix.")
-        return False
-
+def perform_review(pr_number, repo_full_name):
     # Security: Validate repo_full_name format (owner/repo)
     if not re.match(r"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$", repo_full_name):
         print(f"Aborting: repo_full_name '{repo_full_name}' is invalid.")
         return False
 
+    # Build GitHub API URL from validated inputs instead of using payload-provided URLs.
+    pr_api_url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pr_number}"
     headers = {}
     if GITHUB_TOKEN:
         headers['Authorization'] = f"token {GITHUB_TOKEN}"
-    if use_api_header:
-        headers['Accept'] = 'application/vnd.github.v3.diff'
+    headers['Accept'] = 'application/vnd.github.v3.diff'
         
-    diff_resp = requests.get(diff_url_or_api, headers=headers, timeout=HTTP_TIMEOUT)
+    diff_resp = requests.get(pr_api_url, headers=headers, timeout=HTTP_TIMEOUT)
     if diff_resp.status_code != 200:
         print("Failed to get diff")
         return False
@@ -122,11 +117,10 @@ def github_webhook():
     # 1. Listen for new PRs or changes to a PR
     if event == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
         pr = payload["pull_request"]
-        diff_url = pr["diff_url"]
         repo_full_name = payload["repository"]["full_name"]
         pr_number = pr["number"]
         
-        perform_review(pr_number, diff_url, repo_full_name)
+        perform_review(pr_number, repo_full_name)
         
     # 2. Listen for manual trigger via comments (@pupbot or /pupbot)
     elif event == "issue_comment" and payload.get("action") == "created":
@@ -134,10 +128,8 @@ def github_webhook():
         if ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body or "@gemini" in comment_body or "gemini" in comment_body) and "pull_request" in payload["issue"]:
             pr_number = payload["issue"]["number"]
             repo_full_name = payload["repository"]["full_name"]
-            pr_api_url = payload["issue"]["pull_request"]["url"]
             print(f"Manual Codepup review triggered via comment on PR #{pr_number}")
-            # For PR API URLs, we must send the V3 diff accept header
-            perform_review(pr_number, pr_api_url, repo_full_name, use_api_header=True)
+            perform_review(pr_number, repo_full_name)
 
     return jsonify({"status": "ok"})
 

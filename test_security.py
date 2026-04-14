@@ -7,13 +7,13 @@ import github_bot
 class TestSecurity(unittest.TestCase):
     def test_verify_signature_rejects_when_secret_missing_and_unsigned_not_allowed(self):
         with patch.object(github_bot, "GITHUB_WEBHOOK_SECRET", None), patch.object(
-            github_bot, "ALLOW_UNSIGNED_WEBHOOKS", False
+            github_bot, "ALLOW_MISSING_WEBHOOK_SECRET", False
         ):
             self.assertFalse(github_bot.verify_signature(b"{}", "sha256=abc"))
 
     def test_verify_signature_allows_when_dev_flag_enabled(self):
         with patch.object(github_bot, "GITHUB_WEBHOOK_SECRET", None), patch.object(
-            github_bot, "ALLOW_UNSIGNED_WEBHOOKS", True
+            github_bot, "ALLOW_MISSING_WEBHOOK_SECRET", True
         ):
             self.assertTrue(github_bot.verify_signature(b"{}", None))
 
@@ -47,7 +47,7 @@ class TestSecurity(unittest.TestCase):
             github_bot, "model"
         ) as mock_model:
             mock_model.generate_content.return_value = _AiResponse()
-            ok = github_bot.perform_review(1, "https://github.com/owner/repo/pull/1.diff", "owner/repo")
+            ok = github_bot.perform_review(1, "owner/repo")
 
         self.assertTrue(ok)
         self.assertEqual(mock_get.call_args.kwargs["timeout"], github_bot.HTTP_TIMEOUT)
