@@ -17,13 +17,17 @@ except Exception as e:
 
 GITHUB_TOKEN = os.environ.get("GITHUB_PUPBOT_TOKEN")
 GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET")
+ALLOW_UNSIGNED_WEBHOOKS = os.environ.get("ALLOW_UNSIGNED_WEBHOOKS", "").lower() == "true"
+HTTP_TIMEOUT = (5, 20)
 
 def verify_signature(payload_body, signature_header):
     """Verify that the payload was sent from GitHub by validating SHA256 HMAC."""
     if not GITHUB_WEBHOOK_SECRET:
-        # In production, this should be mandatory. For now, we warn.
-        print("Warning: GITHUB_WEBHOOK_SECRET not set. Skipping signature verification.")
-        return True
+        if ALLOW_UNSIGNED_WEBHOOKS:
+            print("Warning: GITHUB_WEBHOOK_SECRET not set. Unsigned webhooks allowed by configuration.")
+            return True
+        print("Error: GITHUB_WEBHOOK_SECRET not set. Rejecting webhook.")
+        return False
 
     if not signature_header:
         return False
@@ -55,7 +59,7 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
     if use_api_header:
         headers['Accept'] = 'application/vnd.github.v3.diff'
         
-    diff_resp = requests.get(diff_url_or_api, headers=headers, timeout=(5, 30))
+    diff_resp = requests.get(diff_url_or_api, headers=headers, timeout=HTTP_TIMEOUT)
     if diff_resp.status_code != 200:
         print("Failed to get diff")
         return False
@@ -87,7 +91,7 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
             comment_url = f"https://api.github.com/repos/{repo_full_name}/issues/{pr_number}/comments"
             # Remove the Accept header for posting the comment
             post_headers = {'Authorization': f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment}, timeout=(5, 30))
+            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment}, timeout=HTTP_TIMEOUT)
             if res.status_code == 201:
                 print(f"Successfully posted review to PR #{pr_number}")
                 return True
@@ -109,7 +113,9 @@ def github_webhook():
         return jsonify({"error": "Invalid signature"}), 403
 
     event = request.headers.get('X-GitHub-Event')
-    payload = request.json
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"error": "Invalid JSON payload"}), 400
 
     print(f"Received GitHub Webhook: {event}")
 
