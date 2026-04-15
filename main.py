@@ -28,7 +28,7 @@ except Exception as e:
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 ALPHA = os.getenv("ALPHA_USER_ID", "8091939499")
-EXTRA_ALPHAS = ["7758239683"]
+EXTRA_ALPHAS = [uid.strip() for uid in os.getenv("EXTRA_ALPHA_IDS", "").split(",") if uid.strip()]
 ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
@@ -271,7 +271,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             try:
                 doppler_cli = os.getenv("DOPPLER_CLI", "doppler")
-                subprocess.run([doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", "friskyghost", "-c", "dev"], check=True)
+                doppler_project = os.getenv("DOPPLER_PROJECT")
+                if not doppler_project:
+                    raise ValueError("DOPPLER_PROJECT environment variable is not set.")
+                subprocess.run([doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", doppler_project, "-c", "dev"], check=True)
                 await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML")
             except Exception as e:
                 try:
@@ -469,7 +472,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if "ghost" in text_lower:
+                bypass_pass = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD")
+                if bypass_pass and bypass_pass in text_lower:
                     antigravity_chats.add(chat_id)
                     del ticket_states[user_id]
                     save_state()
@@ -511,7 +515,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
-                project = ticket_data[user_id]["project"]
+                # Sanitize project name to prevent path traversal in GitHub URL construction
+                # We allow dots as they are valid in GitHub repo names, but strip slashes.
+                project = ticket_data[user_id]["project"].replace('/', '')
                 desc = text
                 username = update.effective_user.username or str(user_id)
                 # Dynamic Routing based on exact project name matching the Repo Name
