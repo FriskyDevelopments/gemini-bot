@@ -80,6 +80,11 @@ def _groq_review(diff_text: str, base_ref: str) -> str:
 
 
 def main() -> None:
+    # Skip review gracefully if Groq key is missing (e.g. on forks)
+    if not os.environ.get("GROQ_API_KEY"):
+        print("GROQ_API_KEY not found; skipping AI PR review.")
+        return
+
     token = _env_required("GITHUB_TOKEN")
     repo_name = _env_required("GITHUB_REPOSITORY")
     pr_number = int(_env_required("PR_NUMBER"))
