@@ -46,8 +46,11 @@ def _build_filtered_diff(pull) -> str:
     return "\n\n".join(parts)
 
 
-def _groq_review(diff_text: str, base_ref: str) -> str:
-    key = _env_required("GROQ_API_KEY")
+def _groq_review(diff_text: str, base_ref: str) -> str | None:
+    key = os.environ.get("GROQ_API_KEY")
+    if not key:
+        print("GROQ_API_KEY is not set. Skipping AI review.")
+        return None
     user_content = (
         f"Target branch (merge base): `{base_ref}`\n\n"
         f"Unified diffs for changed `.py`, `.ts`, and `.tsx` files:\n\n{diff_text}"
@@ -104,11 +107,12 @@ def main() -> None:
         )
 
     review_body = _groq_review(diff_text, base_ref)
-    comment = (
-        "## AI PR Review (Groq — Lead Systems Architect)\n\n"
-        + review_body
-    )
-    pr.create_issue_comment(comment)
+    if review_body:
+        comment = (
+            "## AI PR Review (Groq — Lead Systems Architect)\n\n"
+            + review_body
+        )
+        pr.create_issue_comment(comment)
 
 
 if __name__ == "__main__":
