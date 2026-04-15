@@ -15,3 +15,7 @@
 ## 2026-04-14 - [Explicit Flow Control]
 **Learning:** Multi-step interactive flows (like bug ticketing) can feel like a "trap" if there isn't an obvious way to exit.
 **Action:** Always include a "Cancel" button or clear command instructions (e.g., "Type /cancel") in interactive menus.
+
+## 2026-04-15 - [Strict Format Consistency]
+**Learning:** Mixing Markdown and HTML syntax in Telegram messages while `parse_mode='HTML'` is active leads to unpolished UI (literal symbols) or silent API failures if user-provided strings contain unescaped HTML entities.
+**Action:** Exclusively use HTML tags for formatting and always apply `html.escape()` to any dynamic text injected into HTML templates.
