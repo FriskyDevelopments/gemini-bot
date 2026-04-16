@@ -68,6 +68,21 @@ Help STIX MΛGIC become the default sticker creation engine for online communiti
 🐾 Forged with a frisky paw and a daring heart.
 Bringing the magic of STIX MΛGIC to life ✨"""
 
+MENU_TEXT = (
+    "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
+    "<b>🎭 Personas & Modes</b>\n"
+    "  • <code>/alchemy</code> - Summon the Λlchemy Curator Wizard\n"
+    "  • <code>/antigravity</code> - Summon the Antigravity Developer Core\n\n"
+    "<b>🛠️ System & Debugging</b>\n"
+    "  • <code>/ticket</code> - Open the Jules Bug Reporter\n"
+    "  • <code>/ping</code> - Quick feedback & Help Menu\n"
+    "  • <code>/ping &lt;msg&gt;</code> - Send instant feedback\n\n"
+    "<b>🔐 Alpha / Admin Only</b>\n"
+    "  • <code>/authorize_group</code> - Allow Pupbot to speak\n"
+    "  • <code>/add_debugger &lt;id&gt;</code> - Grant Reporter access\n\n"
+    "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>"
+)
+
 import db
 
 db.init_db()
@@ -204,7 +219,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 invitations[str(member.id)] = inviter_name
                 save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text=f"Arf arf!! 🐾 Welcome to the Pup Lounge, {member.first_name}! 🥂✨ I'm Pupbot, your host! Grab a bowl, stretch those paws, and give the pack a bark! Who's ready to play?")
+                keyboard = [[InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Arf arf!! 🐾 Welcome to the Pup Lounge, {member.first_name}! 🥂✨ I'm Pupbot, your host! Grab a bowl, stretch those paws, and give the pack a bark! Who's ready to play?",
+                    reply_markup=reply_markup
+                )
             except Exception as e: logging.debug(f"Ignored error: {e}")
         return
 
@@ -214,22 +235,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
-            menu_text = (
-                "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
-                "<b>🎭 Personas & Modes</b>\n"
-                "  • <code>/alchemy</code> - Summon the Λlchemy Curator Wizard\n"
-                "  • <code>/antigravity</code> - Summon the Antigravity Developer Core\n\n"
-                "<b>🛠️ System & Debugging</b>\n"
-                "  • <code>/ticket</code> - Open the Jules Bug Reporter\n"
-                "  • <code>/ping</code> - Quick feedback & Help Menu\n"
-                "  • <code>/ping &lt;msg&gt;</code> - Send instant feedback\n\n"
-                "<b>🔐 Alpha / Admin Only</b>\n"
-                "  • <code>/authorize_group</code> - Allow Pupbot to speak\n"
-                "  • <code>/add_debugger &lt;id&gt;</code> - Grant Reporter access\n\n"
-                "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>"
-            )
             try:
-                await context.bot.send_message(chat_id=chat_id, text=menu_text, parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML")
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
                 await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: {e}")
@@ -302,7 +309,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_states[user_id] = "antigravity_bypass"
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter bypass password to summon Antigravity into this communal chat:</i>", parse_mode="HTML")
+                    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter bypass password to summon Antigravity into this communal chat:</i>",
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -373,6 +387,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"Ping Feedback from @{username}", "body": comment, "labels": ["feedback", "pupbot-routed"]}
                     try:
                         import httpx
+                        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                         async with httpx.AsyncClient() as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
@@ -679,14 +694,22 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
+
+    if query.data == "show_menu":
+        await query.answer()
+        await query.edit_message_text(MENU_TEXT, parse_mode="HTML")
+        return
     
     if query.data == "ping_comment":
         ticket_states[user_id] = "ping_comment_entry"
         save_state()
         await query.answer()
+        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
             "👔 **Logic Feedback:**\nPlease type your comment about the logic. It will be logged to GitHub.",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=reply_markup
         )
         return
 
@@ -698,6 +721,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
             data = {"title": f"🚨 EMERGENCY: Clipsflow Unresponsive (Reported by @{username})", "body": f"**Status:** Bot is dead / not responding to commands.\n**Reporter:** @{username}", "labels": ["bug", "critical", "pupbot-routed"]}
             try:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                 async with httpx.AsyncClient() as client:
                     await client.post(url, headers=headers, json=data)
             except Exception as e: 
@@ -744,9 +768,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_states[user_id] = "project_other"
         save_state()
         await query.answer()
+        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
             "👔 **Manual Override**\nPlease type the name of the project or repository this bug belongs to:",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=reply_markup
         )
         return
 
@@ -755,10 +782,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_state()
     
     await query.answer()
+    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
         f"👔 Project locked to `{repo_name}` repository.\n\n"
         "Now, please provide a detailed description of the bug.",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=reply_markup
     )
 
 if __name__ == '__main__':
