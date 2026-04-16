@@ -16,7 +16,7 @@ try:
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode()
-    urllib.request.urlopen(url, data=data)
+    urllib.request.urlopen(url, data=data, timeout=10)
     print("Successfully barked into the lounge!")
 except Exception as e:
     print(f"Error: {e}")

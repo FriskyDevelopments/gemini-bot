@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 import threading
@@ -156,9 +157,9 @@ def snag_engine():
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             data = urllib.parse.urlencode({"chat_id": pup_chat_id, "text": msg}).encode()
             try:
-                urllib.request.urlopen(url, data=data)
+                urllib.request.urlopen(url, data=data, timeout=10)
             except Exception as e:
-                logging.info("Failed to notify:", e)
+                logging.info(f"Failed to notify: {e}")
                 
             break
             
@@ -516,8 +517,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             elif state == "desc":
                 # Sanitize project name to prevent path traversal in GitHub URL construction
-                # We allow dots as they are valid in GitHub repo names, but strip slashes.
-                project = ticket_data[user_id]["project"].replace('/', '')
+                # Use a strict whitelist regex: only alphanumeric, dots, underscores, and dashes allowed.
+                raw_project = ticket_data[user_id]["project"]
+                project = re.sub(r'[^a-zA-Z0-9._-]', '', raw_project)
                 desc = text
                 username = update.effective_user.username or str(user_id)
                 # Dynamic Routing based on exact project name matching the Repo Name

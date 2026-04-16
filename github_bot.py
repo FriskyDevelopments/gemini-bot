@@ -12,9 +12,8 @@ GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET")
 def verify_signature(data, signature):
     """Verify that the payload was sent from GitHub by validating SHA256."""
     if not GITHUB_WEBHOOK_SECRET:
-        # If secret is not configured, we log a warning but allow for now to avoid breakage,
-        # however Sentinel recommends enforcing this.
-        return True
+        print("CRITICAL: GITHUB_WEBHOOK_SECRET is not set. All webhooks will be rejected.")
+        return False
     if not signature:
         return False
     try:
@@ -35,6 +34,13 @@ except Exception as e:
 
 GITHUB_TOKEN = os.environ.get("GITHUB_PUPBOT_TOKEN")
 
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
+    return response
+
 @app.route("/", methods=["GET"])
 def index():
     return "Codepup GitHub Webhook is listening! Arf!"
@@ -51,7 +57,7 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
     if use_api_header:
         headers['Accept'] = 'application/vnd.github.v3.diff'
         
-    diff_resp = requests.get(diff_url_or_api, headers=headers)
+    diff_resp = requests.get(diff_url_or_api, headers=headers, timeout=10)
     if diff_resp.status_code != 200:
         print("Failed to get diff")
         return False
@@ -83,7 +89,7 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
             comment_url = f"https://api.github.com/repos/{repo_full_name}/issues/{pr_number}/comments"
             # Remove the Accept header for posting the comment
             post_headers = {'Authorization': f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment})
+            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment}, timeout=10)
             if res.status_code == 201:
                 print(f"Successfully posted review to PR #{pr_number}")
                 return True
