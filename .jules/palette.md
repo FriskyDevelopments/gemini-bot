@@ -15,3 +15,7 @@
 ## 2026-04-14 - [Explicit Flow Control]
 **Learning:** Multi-step interactive flows (like bug ticketing) can feel like a "trap" if there isn't an obvious way to exit.
 **Action:** Always include a "Cancel" button or clear command instructions (e.g., "Type /cancel") in interactive menus.
+
+## 2024-05-15 - [Safe HTML Formatting]
+**Learning:** When using `parse_mode='HTML'` in Telegram, any unescaped special characters (like `<`, `>`, `&`) in dynamic content (user input, repo names, error messages) will cause the message to fail. Markdown symbols (like `**` or `` ` ``) are also not parsed as formatting in HTML mode.
+**Action:** Always use `html.escape()` for dynamic strings and use semantic tags like `<b>` or `<code>` when HTML mode is active.
