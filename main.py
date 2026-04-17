@@ -12,6 +12,7 @@ import subprocess
 import urllib.request
 import urllib.parse
 import io
+import html
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CallbackQueryHandler, filters
@@ -302,7 +303,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 antigravity_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🔄 **Antigravity Mode Deactivated.** Returning to Pupbot persona.")
+                    await context.bot.send_message(chat_id=chat_id, text="🔄 <b>Antigravity Mode Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -366,7 +367,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await context.bot.send_message(
                         chat_id=chat_id, 
-                        text="👔 **Jules Diagnostic Interface**\n_(Use this strictly to submit detailed, project-specific bugs.)_\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich **Project** is this bug affecting?", 
+                        text="👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
                         parse_mode="HTML",
                         reply_markup=reply_markup
                     )
@@ -511,6 +512,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"Logic Comment from @{username}", "body": text, "labels": ["feedback", "pupbot-routed"]}
                     try:
                         import httpx
+                        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                         async with httpx.AsyncClient() as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
@@ -527,7 +529,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_states[user_id] = "desc"
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to `{text}`.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{html.escape(text)}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
@@ -542,9 +544,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 if github_token:
                     headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
-                    data = {"title": f"[{project}] Ticket from @{username}", "body": f"**Project Scope:** {project}\n**Reporter:** @{username}\n\n**Issue Details:**\n{desc}", "labels": ["bug", "pupbot-routed"]}
+                    data = {"title": f"[{project}] Ticket from @{username}", "body": f"Project Scope: {project}\nReporter: @{username}\n\nIssue Details:\n{desc}", "labels": ["bug", "pupbot-routed"]}
                     try:
                         import httpx
+                        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                         async with httpx.AsyncClient() as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e: 
@@ -554,7 +557,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_data.pop(user_id, None)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the `{project}` CI/CD pipeline.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the <code>{html.escape(project)}</code> CI/CD pipeline.", parse_mode="HTML")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
 
@@ -666,7 +669,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
                 # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
-            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{e}</code>"
+            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{html.escape(str(e))}</code>"
             try:
                 await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode="HTML")
             except: pass
@@ -709,7 +712,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 **Logic Feedback:**\nPlease type your comment about the logic. It will be logged to GitHub.",
+            "👔 <b>Logic Feedback:</b>\nPlease type your comment about the logic. It will be logged to GitHub.",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
@@ -735,11 +738,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "ping_help":
         help_text = (
-            "✅ **JULES SYSTEM: ONLINE.**\n\n"
-            "**Tester Guide:**\n"
-            "• Use `📝 Add Logic Comment` for fast feedback.\n"
-            "• Use `🚨 Report Bot Unresponsive` if Clipsflow is totally dead.\n"
-            "• Type `/ticket` if you need to submit a descriptive bug."
+            "✅ <b>JULES SYSTEM: ONLINE.</b>\n\n"
+            "<b>Tester Guide:</b>\n"
+            "• Use <code>📝 Add Logic Comment</code> for fast feedback.\n"
+            "• Use <code>🚨 Report Bot Unresponsive</code> if Clipsflow is totally dead.\n"
+            "• Type <code>/ticket</code> if you need to submit a descriptive bug."
         )
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
@@ -773,7 +776,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 **Manual Override**\nPlease type the name of the project or repository this bug belongs to:",
+            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
@@ -787,7 +790,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        f"👔 Project locked to `{repo_name}` repository.\n\n"
+        f"👔 Project locked to <code>{html.escape(repo_name)}</code> repository.\n\n"
         "Now, please provide a detailed description of the bug.",
         parse_mode="HTML",
         reply_markup=reply_markup
