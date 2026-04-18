@@ -230,6 +230,15 @@ except Exception as e:
 # (Now initialized globally via db)
 
 async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle incoming Telegram updates for the Pup Lounge, routing new-member welcomes, deterministic commands, ticketing flows, spam detection, conversational AI replies, and admin utilities.
+    
+    This function processes a single Update from Telegram and performs side-effecting actions: sending or editing messages, posting GitHub issues, dispatching promos to channels/ Twitter/ Supabase (when configured), toggling chat modes (antigravity/alchemy), managing ticket state, recording inviter information, deleting messages flagged as spam, and persisting in-memory state via save_state().
+    
+    Parameters:
+        update (telegram.Update): Incoming Telegram update containing message and metadata.
+        context (telegram.ext.ContextTypes.DEFAULT_TYPE): Handler context providing the bot instance and job queue.
+    """
     if not update.message or not update.message.from_user: return
     
     user_id = str(update.effective_user.id)
@@ -721,6 +730,21 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Route and handle inline callback queries from Telegram, performing menu, ticket, and ping actions.
+    
+    Supports these callback payloads:
+    - "show_menu": Replaces the original message with the active menu (normal, antigravity, or alchemy) based on the chat mode.
+    - "ping_comment": Enters a logic-feedback ticket flow for the user and prompts for a comment (provides a cancel button).
+    - "ping_bot_dead": Attempts to file an emergency GitHub issue (when a GitHub token is present), notifies the chat, and edits the message with an emergency confirmation.
+    - "ping_help": Shows a tester guide with buttons to add a logic comment or report the bot unresponsive.
+    - "ticket_cancel": Cancels any active ticket flow for the user, clears related in-memory ticket state/data, and persists state.
+    - "ticket_proj:<repo>": Validates an active ticket flow in the "project" state; for "Other" switches to manual project entry, otherwise locks the ticket to the selected repository and prompts for a bug description.
+    
+    Side effects:
+    - Mutates and persists global ticket state/data via save_state().
+    - Edits messages, answers callbacks, and may issue network requests (e.g., GitHub) depending on payload and available credentials.
+    """
     query = update.callback_query
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
