@@ -15,3 +15,7 @@
 ## 2026-04-14 - [Explicit Flow Control]
 **Learning:** Multi-step interactive flows (like bug ticketing) can feel like a "trap" if there isn't an obvious way to exit.
 **Action:** Always include a "Cancel" button or clear command instructions (e.g., "Type /cancel") in interactive menus.
+
+## 2026-04-18 - [Persona-Aware Menus & Accessibility Redundancy]
+**Learning:** For bots with distinct personas, context-aware help menus improve immersion and command discoverability. Additionally, always sending text alongside AI voice messages is a critical accessibility requirement.
+**Action:** Implement conditional help menus based on active persona state and ensure text fallbacks/companions for all media-based responses.
