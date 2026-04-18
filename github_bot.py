@@ -1,6 +1,7 @@
 import os
 import hmac
 import hashlib
+import re
 import requests
 from flask import Flask, request, jsonify
 import google.generativeai as genai
@@ -47,8 +48,14 @@ def index():
 
 def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=False):
     # SSRF Protection: Ensure we only request from trusted GitHub domains
-    if not (diff_url_or_api.startswith("https://github.com/") or diff_url_or_api.startswith("https://api.github.com/")):
+    allowed_prefixes = ("https://api.github.com/", "https://github.com/")
+    if not any(diff_url_or_api.startswith(prefix) for prefix in allowed_prefixes):
         print(f"Blocked suspicious request to: {diff_url_or_api}")
+        return False
+
+    # Security: Validate repo_full_name format (owner/repo)
+    if not re.match(r"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$", repo_full_name):
+        print(f"Aborting: repo_full_name '{repo_full_name}' is invalid.")
         return False
 
     headers = {}
@@ -56,14 +63,14 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
         headers['Authorization'] = f"token {GITHUB_TOKEN}"
     if use_api_header:
         headers['Accept'] = 'application/vnd.github.v3.diff'
-        
-    diff_resp = requests.get(diff_url_or_api, headers=headers, timeout=10)
+
+    diff_resp = requests.get(diff_url_or_api, headers=headers, timeout=(5, 30))
     if diff_resp.status_code != 200:
         print("Failed to get diff")
         return False
-        
+
     diff_text = diff_resp.text
-    
+
     prompt = f"""
     You are "Codepup", an elite AI code review assistant (superior to CodeRabbit).
     You are a highly capable senior developer with a playful pup persona, but extremely serious about code quality.
@@ -75,7 +82,7 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
     3. **Performance & Best Practices**: Suggest optimizations or cleaner patterns. Avoid nitpicks (e.g. trailing whitespaces).
     4. **Provide Fixes**: IMPORTANT - If you find an issue, provide the EXACT code fix using Github code suggestion markdown format (i.e. ` ```suggestion `) or standard diff blocks so the developer can easily copy/paste or apply it.
 
-    Keep the tone encouraging, elite, and slightly playful (maybe one 'Arf!' or tail wag compliment). 
+    Keep the tone encouraging, elite, and slightly playful (maybe one 'Arf!' or tail wag compliment).
 
     Here is the diff:
     {diff_text}
@@ -84,12 +91,12 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
         print(f"Analyzing PR #{pr_number} with Codepup (Gemini)...")
         ai_response = model.generate_content(prompt)
         review_comment = f"🐶 **Codepup Review** 🐾\n\n{ai_response.text}"
-        
+
         if GITHUB_TOKEN:
             comment_url = f"https://api.github.com/repos/{repo_full_name}/issues/{pr_number}/comments"
             # Remove the Accept header for posting the comment
             post_headers = {'Authorization': f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment}, timeout=10)
+            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment}, timeout=(5, 30))
             if res.status_code == 201:
                 print(f"Successfully posted review to PR #{pr_number}")
                 return True
@@ -105,7 +112,9 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
 @app.route("/github-webhook", methods=["POST"])
 def github_webhook():
     signature = request.headers.get('X-Hub-Signature-256')
-    if not verify_signature(request.data, signature):
+    payload_body = request.get_data()
+
+    if not verify_signature(payload_body, signature):
         return jsonify({"error": "Invalid signature"}), 403
 
     event = request.headers.get('X-GitHub-Event')
@@ -119,9 +128,9 @@ def github_webhook():
         diff_url = pr["diff_url"]
         repo_full_name = payload["repository"]["full_name"]
         pr_number = pr["number"]
-        
+
         perform_review(pr_number, diff_url, repo_full_name)
-        
+
     # 2. Listen for manual trigger via comments (@pupbot or /pupbot)
     elif event == "issue_comment" and payload.get("action") == "created":
         comment_body = payload["comment"]["body"].lower()
