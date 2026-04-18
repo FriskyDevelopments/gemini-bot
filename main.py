@@ -85,6 +85,30 @@ MENU_TEXT = (
     "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>"
 )
 
+ANTIGRAVITY_MENU_TEXT = (
+    "⚡ <b>ANTIGRAVITY DEVELOPER CORE</b> ⚡\n\n"
+    "<b>💻 Infrastructure & Dev Ops</b>\n"
+    "  • <code>/antigravity</code> - Deactivate Developer Mode\n"
+    "  • <code>/ticket</code> - Open the Jules Bug Reporter\n"
+    "  • <code>/ping</code> - Quick feedback & Help Menu\n\n"
+    "<b>🔐 Alpha / Admin Only</b>\n"
+    "  • <code>/authorize_group</code> - Allow AI interaction\n"
+    "  • <code>/add_debugger &lt;id&gt;</code> - Grant Reporter access\n\n"
+    "<i>Note: Conversations in this mode are strictly technical.</i>"
+)
+
+ALCHEMY_MENU_TEXT = (
+    "✨ <b>ΛLCHEMY CURATOR WIZARD</b> ✨\n\n"
+    "<b>🪄 Product & Magic</b>\n"
+    "  • <code>/alchemy</code> - Deactivate Wizard Mode\n"
+    "  • <code>/ticket</code> - Open the Jules Bug Reporter\n"
+    "  • <code>/ping</code> - Quick feedback & Help Menu\n\n"
+    "<b>🔐 Alpha / Admin Only</b>\n"
+    "  • <code>/authorize_group</code> - Allow AI interaction\n"
+    "  • <code>/add_debugger &lt;id&gt;</code> - Grant Reporter access\n\n"
+    "<i>Note: Conversations in this mode focus on STIX MΛGIC growth.</i>"
+)
+
 import db
 
 db.init_db()
@@ -238,7 +262,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
             try:
-                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML")
+                active_menu = MENU_TEXT
+                if chat_id in antigravity_chats:
+                    active_menu = ANTIGRAVITY_MENU_TEXT
+                elif chat_id in alchemy_chats:
+                    active_menu = ALCHEMY_MENU_TEXT
+                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML")
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
                 await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: <code>{html.escape(str(e))}</code>", parse_mode="HTML")
@@ -651,23 +680,22 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as tts_err:
                     logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
 
-                # Always send text too (readable on desktop / if voice failed)
-                if not voice_sent:
-                    max_len = 4000
-                    for i in range(0, len(reply_text), max_len):
-                        chunk = reply_text[i:i+max_len]
-                        try:
-                            if i == 0:
-                                await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id, parse_mode="Markdown")
-                            else:
-                                await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
-                        except Exception as md_err:
-                            logging.warning(f"Markdown failed, falling back to plain text: {md_err}")
-                            if i == 0:
-                                await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
-                            else:
-                                await context.bot.send_message(chat_id=chat_id, text=chunk)
-                    logging.info(f"✅ AI Text responded back to {user_name} successfully.")
+                # Always send text too (readable on desktop / if voice failed / accessibility)
+                max_len = 4000
+                for i in range(0, len(reply_text), max_len):
+                    chunk = reply_text[i:i+max_len]
+                    try:
+                        if i == 0:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id, parse_mode="Markdown")
+                        else:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
+                    except Exception as md_err:
+                        logging.warning(f"Markdown failed, falling back to plain text: {md_err}")
+                        if i == 0:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
+                        else:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk)
+                logging.info(f"✅ AI Text responded back to {user_name} successfully.")
                 # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
             error_msg = f"❌ <b>AI Engine Fault:</b> <code>{html.escape(str(e))}</code>"
@@ -703,7 +731,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "show_menu":
         await query.answer()
-        await query.edit_message_text(MENU_TEXT, parse_mode="HTML")
+        active_menu = MENU_TEXT
+        if chat_id in antigravity_chats:
+            active_menu = ANTIGRAVITY_MENU_TEXT
+        elif chat_id in alchemy_chats:
+            active_menu = ALCHEMY_MENU_TEXT
+        await query.edit_message_text(active_menu, parse_mode="HTML")
         return
     
     if query.data == "ping_comment":
