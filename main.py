@@ -380,6 +380,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Start Ticketing
         if text_lower.startswith("/ping"):
+            if user_id not in debuggers:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ Access Denied. You must be an authorized debugger to use the diagnostic system.")
+                except Exception as e: logging.debug(f"Ignored error: {e}")
+                return
+
             comment = text[5:].strip()
             if comment:
                 username = update.effective_user.username or str(user_id)
@@ -705,6 +711,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if query.data == "ping_comment":
+        if user_id not in debuggers:
+            await query.answer("Access Denied.", show_alert=True)
+            return
         ticket_states[user_id] = "ping_comment_entry"
         save_state()
         await query.answer()
@@ -718,6 +727,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "ping_bot_dead":
+        if user_id not in debuggers:
+            await query.answer("Access Denied.", show_alert=True)
+            return
         username = update.effective_user.username or user_id
         url = "https://api.github.com/repos/FriskyDevelopments/ClipFLOW/issues"
         import httpx
@@ -736,6 +748,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "ping_help":
+        if user_id not in debuggers:
+            await query.answer("Access Denied.", show_alert=True)
+            return
         help_text = (
             "✅ <b>JULES SYSTEM: ONLINE.</b>\n\n"
             "<b>Tester Guide:</b>\n"
