@@ -520,7 +520,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
                 bypass_pass = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD")
-                if bypass_pass and bypass_pass in text_lower:
+                # SECURITY: Use exact equality for bypass password to prevent unintended matches
+                if bypass_pass and text_lower == bypass_pass:
                     antigravity_chats.add(chat_id)
                     del ticket_states[user_id]
                     save_state()
