@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 import hmac
 import hashlib
 import re
@@ -40,6 +41,7 @@ def add_security_headers(response):
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
 @app.route("/", methods=["GET"])
@@ -47,10 +49,14 @@ def index():
     return "Codepup GitHub Webhook is listening! Arf!"
 
 def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=False):
-    # SSRF Protection: Ensure we only request from trusted GitHub domains
-    allowed_prefixes = ("https://api.github.com/", "https://github.com/")
-    if not any(diff_url_or_api.startswith(prefix) for prefix in allowed_prefixes):
-        print(f"Blocked suspicious request to: {diff_url_or_api}")
+    # SSRF Protection: Ensure we only request from trusted GitHub domains (HTTPS and github.com / api.github.com)
+    try:
+        parsed = urllib.parse.urlparse(diff_url_or_api)
+        if parsed.scheme != "https" or parsed.hostname not in ("api.github.com", "github.com"):
+            print(f"Blocked suspicious request to: {diff_url_or_api}")
+            return False
+    except Exception as e:
+        print(f"Error parsing URL '{diff_url_or_api}': {e}")
         return False
 
     # Security: Validate repo_full_name format (owner/repo)
