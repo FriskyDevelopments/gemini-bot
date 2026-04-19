@@ -19,3 +19,7 @@
 ## 2026-04-18 - [Persona-Aware Menus & Accessibility Redundancy]
 **Learning:** For bots with distinct personas, context-aware help menus improve immersion and command discoverability. Additionally, always sending text alongside AI voice messages is a critical accessibility requirement.
 **Action:** Implement conditional help menus based on active persona state and ensure text fallbacks/companions for all media-based responses.
+
+## 2026-05-10 - [Non-Destructive Navigation]
+**Learning:** In multi-step interactive flows (like bug reporting or feedback), "Cancel" buttons are necessary but can be frustrating if the user only wants to correct a minor mistake.
+**Action:** Implement "⬅️ Back" buttons in nested sub-menus to allow users to return to the previous state without destroying their session progress.
