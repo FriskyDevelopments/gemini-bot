@@ -738,12 +738,46 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             active_menu = ALCHEMY_MENU_TEXT
         await query.edit_message_text(active_menu, parse_mode="HTML")
         return
+
+    if query.data == "ping_back":
+        ticket_states.pop(user_id, None)
+        save_state()
+        await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
+            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
+            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+        ]
+        await query.edit_message_text("✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    if query.data == "ticket_back":
+        ticket_states[user_id] = "project"
+        ticket_data.pop(user_id, None)
+        save_state()
+        await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
+             InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
+            [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
+             InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+        ]
+        await query.edit_message_text(
+            "👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
     
     if query.data == "ping_comment":
         ticket_states[user_id] = "ping_comment_entry"
         save_state()
         await query.answer()
-        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back"),
+             InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
             "👔 <b>Logic Feedback:</b>\nPlease type your comment about the logic. It will be logged to GitHub.",
@@ -780,7 +814,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
-            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")]
+            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")]
         ]
         await query.answer()
         await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -807,7 +842,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_states[user_id] = "project_other"
         save_state()
         await query.answer()
-        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Back", callback_data="ticket_back"),
+             InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+        ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
             "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:",
@@ -821,7 +859,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_state()
     
     await query.answer()
-    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Back", callback_data="ticket_back"),
+         InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     safe_repo = html.escape(repo_name)
     await query.edit_message_text(
