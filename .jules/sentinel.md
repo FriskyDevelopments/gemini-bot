@@ -14,3 +14,8 @@
 **Vulnerability:** SSRF protection using `.startswith()` was vulnerable to hostname manipulation, and a bypass password check used `in` instead of exact equality.
 **Learning:** String prefix checks for URLs can be bypassed with clever hostname/subdomain construction. Likewise, using substring matches for passwords allows accidental or intentional leakage.
 **Prevention:** Use `urllib.parse.urlparse` to strictly validate schemes and hostnames for outbound requests. Always use exact equality (`==`) for password or token comparisons.
+
+## 2025-06-05 - Information Leakage & Resource Exhaustion
+**Vulnerability:** Raw exception details and unvalidated user input lengths were exposed in Telegram responses and processed without timeouts.
+**Learning:** Exposing raw exceptions (`str(e)`) in bot responses can leak internal state, file paths, or API structures. Lack of timeouts on `httpx`/`requests` calls allows third-party latency to hang the bot process.
+**Prevention:** Always use generic error messages for end-users while logging the actual exception internally. Implement strict timeouts (e.g., 10s) for all external network requests and enforce length limits on user-provided text to prevent resource exhaustion.
