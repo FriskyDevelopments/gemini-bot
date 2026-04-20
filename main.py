@@ -94,6 +94,7 @@ debuggers = set(db.get_val("debuggers", [ALPHA]))
 ticket_states = dict(db.get_val("ticket_states", {}))
 ticket_data = dict(db.get_val("ticket_data", {}))
 invitations = dict(db.get_val("invitations", {}))
+relay_drafts = {}
 
 def save_state():
     db.set_val("jules_chats", list(jules_chats))
@@ -204,6 +205,99 @@ except Exception as e:
 
 # Cache: new_user_id -> inviter_name
 # (Now initialized globally via db)
+
+
+async def push_processed_response(context, chat_id, target_chat, reply_text, user_name, target_reply_id=None):
+    from telegram import Update
+    import logging
+    import os
+    import re
+    
+    if not reply_text:
+        return
+        
+    # ── Format Gemini Markdown to Telegram HTML ── #
+    formatted_text = reply_text
+    # Convert Headers (## Text) -> Bold Headers
+    formatted_text = re.sub(r'(?m)^#+\s+(.*?)$', r'<b>\1</b>', formatted_text)
+    # Convert Bold (**text**) -> <b>text</b>
+    formatted_text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', formatted_text)
+    # Convert Italics (*text*) -> <i>text</i> - Ignore bullet points which have spaces!
+    formatted_text = re.sub(r'(?<!\s)\*(.*?)\*(?!\s)', r'<i>\1</i>', formatted_text)
+    # Convert bullet points (* or -) 
+    formatted_text = re.sub(r'(?m)^(\s*)[*+-]\s+', r'\1• ', formatted_text)
+    # Convert Horizontal Rules (---)
+    formatted_text = re.sub(r'(?m)^\s*---\s*$', r'━━━━━━━━━━━━━━━', formatted_text)
+    
+    # ── Image Generation Detection ── #
+    image_url = None
+    img_match = re.search(r'<a href="(https://image\.pollinations\.ai/[^"]+)".*?>(?:&#8205;|.*?)</a>', formatted_text)
+    if img_match:
+        image_url = img_match.group(1).replace("&amp;", "&")
+        formatted_text = formatted_text.replace(img_match.group(0), "")
+    else:
+        # Also try to catch naked pollinations links without HTML
+        img_match2 = re.search(r'(https://image\.pollinations\.ai/[^\s<>]+)', formatted_text)
+        if img_match2:
+            image_url = img_match2.group(1).replace("&amp;", "&")
+            formatted_text = formatted_text.replace(img_match2.group(0), "")
+    
+    # ── 🔊 TTS Voice Reply (Groq PlayAI) ── #
+    voice_sent = False
+    try:
+        import httpx, io
+        await context.bot.send_chat_action(chat_id=target_chat, action="record_voice")
+        tts_text = reply_text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")[:4096]
+        async with httpx.AsyncClient(timeout=10) as tts_client:
+            tts_resp = await tts_client.post(
+                "https://api.groq.com/openai/v1/audio/speech",
+                headers={"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}", "Content-Type": "application/json"},
+                json={"model": "playai-tts", "input": tts_text, "voice": "Fritz-PlayAI", "response_format": "wav"}
+            )
+            tts_resp.raise_for_status()
+        audio_buf = io.BytesIO(tts_resp.content)
+        audio_buf.name = "pupbot_voice.wav"
+        await context.bot.send_voice(chat_id=target_chat, voice=audio_buf, reply_to_message_id=target_reply_id)
+        voice_sent = True
+        logging.info(f"✅ AI Voice responded back to {user_name} (Chat {target_chat}) successfully.")
+    except Exception as tts_err:
+        logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
+
+    # Send generated image if one was intercepted
+    if image_url:
+        try:
+            await context.bot.send_photo(chat_id=target_chat, photo=image_url, reply_to_message_id=target_reply_id)
+            logging.info(f"✅ AI Image sent to {user_name} successfully.")
+        except Exception as img_err:
+            logging.error(f"Failed to send pollination image: {img_err}")
+            formatted_text += f"\n\n[Failed to send image: {img_err}]"
+
+    # Always send text too (readable on desktop / if voice failed)
+    if not voice_sent and formatted_text.strip():
+        # Smart paragraph chunker to avoid cutting middle of words or HTML tags
+        paragraphs = formatted_text.split('\n')
+        chunks = []
+        current_chunk = ""
+        for p in paragraphs:
+            if len(current_chunk) + len(p) + 1 > 3900:
+                if current_chunk: chunks.append(current_chunk.strip())
+                current_chunk = p + "\n"
+            else:
+                current_chunk += p + "\n"
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        
+        for i, chunk in enumerate(chunks):
+            try:
+                if i == 0:
+                    await context.bot.send_message(chat_id=target_chat, text=chunk, reply_to_message_id=target_reply_id, parse_mode="HTML")
+                else:
+                    await context.bot.send_message(chat_id=target_chat, text=chunk, parse_mode="HTML")
+            except Exception as parse_e:
+                await context.bot.send_message(chat_id=target_chat, text=chunk)
+        logging.info(f"✅ AI Text responded back to {user_name} successfully.")
+    # ─────────────────────────────────────────────────────────────── #
+
 
 async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user: return
@@ -688,100 +782,39 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
 
             if reply_text:
-                import re
-                
-                target_chat = MAIN_GROUP_ID if (chat_id in relay_chats and MAIN_GROUP_ID) else chat_id
-                target_reply_id = update.message.message_id if target_chat == chat_id else None
-                
-                # ── Format Gemini Markdown to Telegram HTML ── #
-                formatted_text = reply_text
-                # Convert Headers (## Text) -> Bold Headers
-                formatted_text = re.sub(r'(?m)^#+\s+(.*?)$', r'<b>\1</b>', formatted_text)
-                # Convert Bold (**text**) -> <b>text</b>
-                formatted_text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', formatted_text)
-                # Convert Italics (*text*) -> <i>text</i> - Ignore bullet points which have spaces!
-                formatted_text = re.sub(r'(?<!\s)\*(.*?)\*(?!\s)', r'<i>\1</i>', formatted_text)
-                # Convert bullet points (* or -) 
-                formatted_text = re.sub(r'(?m)^(\s*)[*+-]\s+', r'\1• ', formatted_text)
-                # Convert Horizontal Rules (---)
-                formatted_text = re.sub(r'(?m)^\s*---\s*$', r'━━━━━━━━━━━━━━━', formatted_text)
-                
-                # ── Image Generation Detection ── #
-                image_url = None
-                img_match = re.search(r'<a href="(https://image\.pollinations\.ai/[^"]+)".*?>(?:&#8205;|.*?)</a>', formatted_text)
-                if img_match:
-                    image_url = img_match.group(1).replace("&amp;", "&")
-                    formatted_text = formatted_text.replace(img_match.group(0), "")
-                else:
-                    # Also try to catch naked pollinations links without HTML
-                    img_match2 = re.search(r'(https://image\.pollinations\.ai/[^\s<>]+)', formatted_text)
-                    if img_match2:
-                        image_url = img_match2.group(1).replace("&amp;", "&")
-                        formatted_text = formatted_text.replace(img_match2.group(0), "")
-                        
-                # Escape unhandled < and > symbols to prevent HTML parse crashes
-                # We skip this for now since we generated exact HTML tags above.
-                
-                # ── 🔊 TTS Voice Reply (Groq PlayAI) ── #
-                voice_sent = False
-                try:
-                    import httpx, io
-                    await context.bot.send_chat_action(chat_id=target_chat, action="record_voice")
-                    tts_text = reply_text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")[:4096]
-                    async with httpx.AsyncClient(timeout=10) as tts_client:
-                        tts_resp = await tts_client.post(
-                            "https://api.groq.com/openai/v1/audio/speech",
-                            headers={"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}", "Content-Type": "application/json"},
-                            json={"model": "playai-tts", "input": tts_text, "voice": "Fritz-PlayAI", "response_format": "wav"}
-                        )
-                        tts_resp.raise_for_status()
-                    audio_buf = io.BytesIO(tts_resp.content)
-                    audio_buf.name = "pupbot_voice.wav"
-                    await context.bot.send_voice(chat_id=target_chat, voice=audio_buf, reply_to_message_id=target_reply_id)
-                    voice_sent = True
-                    logging.info(f"✅ AI Voice responded back to {user_name} (Chat {target_chat}) successfully.")
-                    if target_chat != chat_id:
-                        await context.bot.send_message(chat_id=chat_id, text="✅ Response transmitted to Main Lounge.")
-                except Exception as tts_err:
-                    logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
-
-                # Send generated image if one was intercepted
-                if image_url:
-                    try:
-                        await context.bot.send_photo(chat_id=target_chat, photo=image_url, reply_to_message_id=target_reply_id)
-                        logging.info(f"✅ AI Image sent to {user_name} successfully.")
-                        if target_chat != chat_id and not voice_sent:
-                            await context.bot.send_message(chat_id=chat_id, text="✅ Response image transmitted to Main Lounge.")
-                    except Exception as img_err:
-                        logging.error(f"Failed to send pollination image: {img_err}")
-                        formatted_text += f"\n\n[Failed to send image: {img_err}]"
-
-                # Always send text too (readable on desktop / if voice failed)
-                if not voice_sent and formatted_text.strip():
-                    # Smart paragraph chunker to avoid cutting middle of words or HTML tags
-                    paragraphs = formatted_text.split('\n')
-                    chunks = []
-                    current_chunk = ""
-                    for p in paragraphs:
-                        if len(current_chunk) + len(p) + 1 > 3900:
-                            if current_chunk: chunks.append(current_chunk.strip())
-                            current_chunk = p + "\n"
-                        else:
-                            current_chunk += p + "\n"
-                    if current_chunk:
-                        chunks.append(current_chunk.strip())
+                if chat_id in relay_chats and MAIN_GROUP_ID:
+                    import uuid
+                    draft_id = str(uuid.uuid4())[:8]
+                    relay_drafts[draft_id] = {
+                        "prompt_list": prompt_list,
+                        "reply_text": reply_text,
+                        "user_name": user_name,
+                        "origin_chat": chat_id,
+                        "target_chat": MAIN_GROUP_ID
+                    }
                     
-                    for i, chunk in enumerate(chunks):
-                        try:
-                            if i == 0:
-                                await context.bot.send_message(chat_id=target_chat, text=chunk, reply_to_message_id=target_reply_id, parse_mode="HTML")
-                            else:
-                                await context.bot.send_message(chat_id=target_chat, text=chunk, parse_mode="HTML")
-                        except Exception as parse_e:
-                            # Fallback if HTML parser crashes
-                            await context.bot.send_message(chat_id=target_chat, text=chunk)
-                    logging.info(f"✅ AI Text responded back to {user_name} successfully.")
-                # ─────────────────────────────────────────────────────────────── #
+                    # Create Preview Msg
+                    import html
+                    preview_lines = reply_text[:3000]
+                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                    keyboard = [
+                        [InlineKeyboardButton("🚀 Send", callback_data=f"relay_send:{draft_id}"),
+                         InlineKeyboardButton("🔄 Retry", callback_data=f"relay_retry:{draft_id}")],
+                        [InlineKeyboardButton("❌ Cancel", callback_data=f"relay_cancel:{draft_id}")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    try:
+                        await context.bot.send_message(
+                            chat_id=chat_id, 
+                            text=f"📢 <b>Relay Draft Preview:</b>\n\n{html.escape(preview_lines)}", 
+                            parse_mode="HTML",
+                            reply_markup=reply_markup
+                        )
+                    except Exception as e:
+                        logging.error(f"Failed to send draft preview: {e}")
+                else:
+                    await push_processed_response(context, chat_id, chat_id, reply_text, user_name, update.message.message_id)
+
         except Exception as e:
             error_msg = f"❌ <b>AI Engine Fault:</b> <code>{e}</code>"
             try:
@@ -813,6 +846,66 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
+
+    
+    if query.data.startswith("relay_"):
+        await query.answer()
+        action, draft_id = query.data.split(":")
+        if draft_id not in relay_drafts:
+            await query.edit_message_text("⚠️ Draft expired or invalid.")
+            return
+            
+        draft = relay_drafts[draft_id]
+        
+        if action == "relay_cancel":
+            del relay_drafts[draft_id]
+            await query.edit_message_text("❌ <b>Relay message cancelled.</b>", parse_mode="HTML")
+            return
+            
+        elif action == "relay_send":
+            await query.edit_message_text("🚀 <b>Transmitting response to Main Lounge...</b>", parse_mode="HTML")
+            await push_processed_response(
+                context, 
+                draft["origin_chat"], 
+                draft["target_chat"], 
+                draft["reply_text"], 
+                draft["user_name"], 
+                None
+            )
+            del relay_drafts[draft_id]
+            await query.edit_message_text("✅ <b>Response transmitted to Main Lounge successfully.</b>", parse_mode="HTML")
+            return
+            
+        elif action == "relay_retry":
+            await query.edit_message_text("🔄 <b>Regenerating response...</b>", parse_mode="HTML")
+            
+            import google.generativeai as genai
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            genai.configure(api_key=gemini_key)
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            import html
+            
+            # Need to get system instruction from main chat
+            # Let's just use SYSTEM_PROMPT since we know it's relaying
+            model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=SYSTEM_PROMPT)
+            response = await model.generate_content_async(draft["prompt_list"])
+            
+            reply_text = response.text.replace("[DELETE]", "").strip()
+            draft["reply_text"] = reply_text
+            relay_drafts[draft_id] = draft
+            
+            preview_lines = reply_text[:3000]
+            keyboard = [
+                [InlineKeyboardButton("🚀 Send", callback_data=f"relay_send:{draft_id}"),
+                 InlineKeyboardButton("🔄 Retry", callback_data=f"relay_retry:{draft_id}")],
+                [InlineKeyboardButton("❌ Cancel", callback_data=f"relay_cancel:{draft_id}")]
+            ]
+            await query.edit_message_text(
+                f"📢 <b>Relay Draft Preview:</b>\n\n{html.escape(preview_lines)}", 
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
 
     if query.data == "show_menu":
         await query.answer()
