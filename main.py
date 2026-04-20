@@ -267,7 +267,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     active_menu = ANTIGRAVITY_MENU_TEXT
                 elif chat_id in alchemy_chats:
                     active_menu = ALCHEMY_MENU_TEXT
-                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML")
+
+                keyboard = [[InlineKeyboardButton("❌ Close Menu", callback_data="close_ui")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
                 await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: <code>{html.escape(str(e))}</code>", parse_mode="HTML")
@@ -430,7 +433,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard = [
                     [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
                     [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-                    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+                    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+                    [InlineKeyboardButton("❌ Close", callback_data="close_ui")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 try:
@@ -536,6 +540,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "ping_comment_entry":
+                if len(text) > 500:
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ <b>Comment too long!</b>\nPlease keep your feedback under 500 characters (yours: {len(text)}).", parse_mode="HTML")
+                    except Exception: pass
+                    return
+
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
                 if github_token:
@@ -543,6 +553,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"Logic Comment from @{username}", "body": text, "labels": ["feedback", "pupbot-routed"]}
                     try:
                         import httpx
+                        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                         async with httpx.AsyncClient() as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
@@ -560,10 +571,16 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_state()
                 try:
                     safe_project = html.escape(text)
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug (max 2000 characters).", parse_mode="HTML")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
+                if len(text) > 2000:
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ <b>Description too long!</b>\nPlease keep your report under 2000 characters (yours: {len(text)}).", parse_mode="HTML")
+                    except Exception: pass
+                    return
+
                 # Sanitize project name to prevent path traversal in GitHub URL construction
                 # Use a strict whitelist regex: only alphanumeric, dots, underscores, and dashes allowed.
                 raw_project = ticket_data[user_id]["project"]
@@ -578,6 +595,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"[{project}] Ticket from @{username}", "body": f"**Project Scope:** {project}\n**Reporter:** @{username}\n\n**Issue Details:**\n{desc}", "labels": ["bug", "pupbot-routed"]}
                     try:
                         import httpx
+                        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                         async with httpx.AsyncClient() as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e: 
@@ -730,6 +748,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
 
+    if query.data == "close_ui":
+        await query.answer()
+        try:
+            await query.delete_message()
+        except Exception:
+            await query.edit_message_text("🗑️ <i>Menu expired or closed.</i>", parse_mode="HTML")
+        return
+
     if query.data == "show_menu":
         await query.answer()
         active_menu = MENU_TEXT
@@ -737,7 +763,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             active_menu = ANTIGRAVITY_MENU_TEXT
         elif chat_id in alchemy_chats:
             active_menu = ALCHEMY_MENU_TEXT
-        await query.edit_message_text(active_menu, parse_mode="HTML")
+
+        keyboard = [[InlineKeyboardButton("❌ Close Menu", callback_data="close_ui")]]
+        await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     if query.data == "ping_back":
@@ -747,7 +775,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
             [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+            [InlineKeyboardButton("❌ Close", callback_data="close_ui")]
         ]
         await query.edit_message_text("✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
         return
@@ -781,7 +810,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 <b>Logic Feedback:</b>\nPlease type your comment about the logic. It will be logged to GitHub.",
+            "👔 <b>Logic Feedback:</b>\nPlease type your comment about the logic (max 500 characters). It will be logged to GitHub.",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
@@ -802,7 +831,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Github push error: {e}")
             
         await query.answer()
-        await query.edit_message_text("🚨 <b>EMERGENCY FLARE FIRED!</b>\nAntigravity is aware. GitHub CI/CD has been alerted that Clipsflow is unresponsive.", parse_mode="HTML")
+        keyboard = [[InlineKeyboardButton("❌ Close", callback_data="close_ui")]]
+        await query.edit_message_text("🚨 <b>EMERGENCY FLARE FIRED!</b>\nAntigravity is aware. GitHub CI/CD has been alerted that Clipsflow is unresponsive.", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     if query.data == "ping_help":
@@ -816,7 +846,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
             [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")]
+            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")],
+            [InlineKeyboardButton("❌ Close", callback_data="close_ui")]
         ]
         await query.answer()
         await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -868,7 +899,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_repo = html.escape(repo_name)
     await query.edit_message_text(
         f"👔 Project locked to <code>{safe_repo}</code> repository.\n\n"
-        "Now, please provide a detailed description of the bug.",
+        "Now, please provide a detailed description of the bug (max 2000 characters).",
         parse_mode="HTML",
         reply_markup=reply_markup
     )
