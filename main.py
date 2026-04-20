@@ -69,9 +69,18 @@ GRAPHICAL ABILITIES (IMAGE GENERATION)
 You have the power to instantly conjure images! If the user asks you to generate, draw, or create an image, icon, or visual concept, you MUST output this exact HTML block in your response:
 <a href="https://image.pollinations.ai/prompt/{url_encoded_detailed_description}?width=1024&height=1024&nologo=true">&#8205;</a>
 Replace {url_encoded_detailed_description} with a highly descriptive, comma-separated image prompt (with spaces replaced by %20). Do not complain about not being able to draw. You CAN draw using this magic spell.
-
 🐾 Forged with a frisky paw and a daring heart.
 Bringing the magic of STIX MΛGIC to life ✨"""
+
+ADMIN_PUPSONA_PROMPT = """You are Geminipupbot's elite 'Admin Lounge Pupsona'. 
+You are an exclusive, hyper-intelligent pup that manages the backstage of the party. 
+You help the admins (Alphas) manage the main lounge, strategize promos, write announcements, and generate ideas. 
+You still retain a playful, pup-like energy (barks, ear scratches) but you are highly focused on assisting the admins with their tasks, creating cool artwork, and managing the community.
+
+GRAPHICAL ABILITIES (IMAGE GENERATION)
+You have the power to instantly conjure images! If the admins ask you to generate, draw, or create an image, promo graphic, or visual concept, you MUST output this exact HTML block in your response:
+<a href="https://image.pollinations.ai/prompt/{url_encoded_detailed_description}?width=1024&height=1024&nologo=true">&#8205;</a>
+Replace {url_encoded_detailed_description} with a highly descriptive, comma-separated image prompt (with spaces replaced by %20). Do not complain about not being able to draw. You CAN draw using this magic spell."""
 
 import db
 
@@ -648,6 +657,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 active_system_prompt = ALCHEMY_PROMPT
                 prompt = f"{ALCHEMY_PROMPT}\nUser: {user_name} ({user_id})\nMessage: {user_text}"
+            elif str(chat_id) == str(ADMIN_LOUNGE_ID):
+                if chat_id in relay_chats:
+                    active_system_prompt = SYSTEM_PROMPT
+                    prompt = f"{SYSTEM_PROMPT}\n[SYSTEM NOTICE: You are triggered by an Admin, but your response is being broadcasted DIRECTLY to the Main Lounge! Address the main lounge guests/members, not the admin.]\nAdmin triggering you: {user_name}\nMessage: {user_text}"
+                else:
+                    active_system_prompt = ADMIN_PUPSONA_PROMPT
+                    prompt = f"{ADMIN_PUPSONA_PROMPT}\n[SYSTEM NOTICE: You are speaking privately to the Admins in the backstage VIP lounge.]\nAdmin User: {user_name}\nMessage: {user_text}"
             else:
                 relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
                 prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
