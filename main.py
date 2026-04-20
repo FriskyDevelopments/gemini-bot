@@ -80,6 +80,7 @@ db.init_db()
 jules_chats = set(db.get_val("jules_chats", []))
 antigravity_chats = set(db.get_val("antigravity_chats", []))
 alchemy_chats = set(db.get_val("alchemy_chats", []))
+relay_chats = set(db.get_val("relay_chats", []))
 debuggers = set(db.get_val("debuggers", [ALPHA]))
 ticket_states = dict(db.get_val("ticket_states", {}))
 ticket_data = dict(db.get_val("ticket_data", {}))
@@ -89,6 +90,7 @@ def save_state():
     db.set_val("jules_chats", list(jules_chats))
     db.set_val("antigravity_chats", list(antigravity_chats))
     db.set_val("alchemy_chats", list(alchemy_chats))
+    db.set_val("relay_chats", list(relay_chats))
     db.set_val("debuggers", list(debuggers))
     db.set_val("ticket_states", ticket_states)
     db.set_val("ticket_data", ticket_data)
@@ -340,6 +342,25 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_state()
             try:
                 await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML")
+            except Exception as e: logging.debug(f"Ignored error: {e}")
+            return
+            
+        # Admin Relay Mode
+        if text_lower == "/relay":
+            if str(chat_id) != str(ADMIN_LOUNGE_ID) and user_id != ALPHA:
+                return
+            if chat_id in relay_chats:
+                relay_chats.remove(chat_id)
+                save_state()
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML")
+                except Exception as e: logging.debug(f"Ignored error: {e}")
+                return
+            
+            relay_chats.add(chat_id)
+            save_state()
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML")
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -635,7 +656,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
-            response = await model.generate_content_async(prompt)
+            
+            prompt_list = [prompt]
+            if getattr(update.message, 'photo', None):
+                photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
+                img_bytes = await photo_file.download_as_bytearray()
+                prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
+                
+            response = await model.generate_content_async(prompt_list)
             
             # Catch safety blocking
             try:
@@ -645,6 +673,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if reply_text:
                 import re
+                
+                target_chat = MAIN_GROUP_ID if (chat_id in relay_chats and MAIN_GROUP_ID) else chat_id
+                target_reply_id = update.message.message_id if target_chat == chat_id else None
                 
                 # ── Format Gemini Markdown to Telegram HTML ── #
                 formatted_text = reply_text
@@ -679,7 +710,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 voice_sent = False
                 try:
                     import httpx, io
-                    await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
+                    await context.bot.send_chat_action(chat_id=target_chat, action="record_voice")
                     tts_text = reply_text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")[:4096]
                     async with httpx.AsyncClient(timeout=10) as tts_client:
                         tts_resp = await tts_client.post(
@@ -690,19 +721,35 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         tts_resp.raise_for_status()
                     audio_buf = io.BytesIO(tts_resp.content)
                     audio_buf.name = "pupbot_voice.wav"
-                    await context.bot.send_voice(chat_id=chat_id, voice=audio_buf, reply_to_message_id=update.message.message_id)
+                    await context.bot.send_voice(chat_id=target_chat, voice=audio_buf, reply_to_message_id=target_reply_id)
                     voice_sent = True
-                    logging.info(f"✅ AI Voice responded back to {user_name} successfully.")
+                    logging.info(f"✅ AI Voice responded back to {user_name} (Chat {target_chat}) successfully.")
+                    if target_chat != chat_id:
+                        await context.bot.send_message(chat_id=chat_id, text="✅ Response transmitted to Main Lounge.")
                 except Exception as tts_err:
                     logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
 
+                # Send generated image if one was intercepted
+                if image_url:
+                    try:
+                        await context.bot.send_photo(chat_id=target_chat, photo=image_url, reply_to_message_id=target_reply_id)
+                        logging.info(f"✅ AI Image sent to {user_name} successfully.")
+                        if target_chat != chat_id and not voice_sent:
+                            await context.bot.send_message(chat_id=chat_id, text="✅ Response image transmitted to Main Lounge.")
+                    except Exception as img_err:
+                        logging.error(f"Failed to send pollination image: {img_err}")
+                        formatted_text += f"\n\n[Failed to send image: {img_err}]"
+
                 # Always send text too (readable on desktop / if voice failed)
-                if not voice_sent:
-                    max_len = 4000
-                    for i in range(0, len(reply_text), max_len):
-                        chunk = reply_text[i:i+max_len]
-                        if i == 0:
-                            await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
+                if not voice_sent and formatted_text.strip():
+                    # Smart paragraph chunker to avoid cutting middle of words or HTML tags
+                    paragraphs = formatted_text.split('\n')
+                    chunks = []
+                    current_chunk = ""
+                    for p in paragraphs:
+                        if len(current_chunk) + len(p) + 1 > 3900:
+                            if current_chunk: chunks.append(current_chunk.strip())
+                            current_chunk = p + "\n"
                         else:
                             current_chunk += p + "\n"
                     if current_chunk:
@@ -711,12 +758,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     for i, chunk in enumerate(chunks):
                         try:
                             if i == 0:
-                                await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id, parse_mode="HTML")
+                                await context.bot.send_message(chat_id=target_chat, text=chunk, reply_to_message_id=target_reply_id, parse_mode="HTML")
                             else:
-                                await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="HTML")
+                                await context.bot.send_message(chat_id=target_chat, text=chunk, parse_mode="HTML")
                         except Exception as parse_e:
                             # Fallback if HTML parser crashes
-                            await context.bot.send_message(chat_id=chat_id, text=chunk)
+                            await context.bot.send_message(chat_id=target_chat, text=chunk)
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
                 # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
