@@ -467,6 +467,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
+        # Generate Invite Link for Main Lounge
+        if text_lower == "/invite" and str(chat_id) == str(ADMIN_LOUNGE_ID):
+            if not MAIN_GROUP_ID:
+                try: await context.bot.send_message(chat_id=chat_id, text="⚠️ MAIN_GROUP_ID is not configured.")
+                except: pass
+                return
+            try:
+                invite = await context.bot.create_chat_invite_link(chat_id=MAIN_GROUP_ID, member_limit=1)
+                await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
+            except Exception as e:
+                try: await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to generate link. Make sure I am an admin in the main lounge!\nError: {e}")
+                except: pass
+            return
+
         # Start Ticketing
         if text_lower == "/ticket":
             if user_id in debuggers:
