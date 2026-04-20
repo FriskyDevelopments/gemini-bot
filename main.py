@@ -562,7 +562,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
     # 3. CONVERSATIONAL LOGIC
     # Trigger if it's Frisky (Alpha), if the bot is mentioned by name, or if someone replies directly to the bot.
-    text_lower = update.message.text.lower() if update.message.text else ""
+    text_lower = (update.message.text or update.message.caption or "").lower()
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
     
@@ -570,8 +570,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
     in_auth_group = chat_id in authorized_groups
     
-    if (user_id == ALPHA or user_id in EXTRA_ALPHAS or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and update.message.text:
-        user_text = update.message.text
+    has_text_or_photo = bool(update.message.text or update.message.photo)
+    
+    if (user_id == ALPHA or user_id in EXTRA_ALPHAS or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and has_text_or_photo:
+        user_text = update.message.text or update.message.caption or ""
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
@@ -609,7 +611,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
-            response = await model.generate_content_async(prompt)
+            
+            prompt_list = [prompt]
+            if update.message.photo:
+                photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
+                img_bytes = await photo_file.download_as_bytearray()
+                prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
+                
+            response = await model.generate_content_async(prompt_list)
             
             # Catch safety blocking
             try:
@@ -632,6 +641,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 formatted_text = re.sub(r'(?m)^(\s*)[*+-]\s+', r'\1• ', formatted_text)
                 # Convert Horizontal Rules (---)
                 formatted_text = re.sub(r'(?m)^\s*---\s*$', r'━━━━━━━━━━━━━━━', formatted_text)
+                
+                # ── Image Generation Detection ── #
+                image_url = None
+                img_match = re.search(r'<a href="(https://image\.pollinations\.ai/[^"]+)".*?>(?:&#8205;|.*?)</a>', formatted_text)
+                if img_match:
+                    image_url = img_match.group(1).replace("&amp;", "&")
+                    formatted_text = formatted_text.replace(img_match.group(0), "")
+                else:
+                    # Also try to catch naked pollinations links without HTML
+                    img_match2 = re.search(r'(https://image\.pollinations\.ai/[^\s<>]+)', formatted_text)
+                    if img_match2:
+                        image_url = img_match2.group(1).replace("&amp;", "&")
+                        formatted_text = formatted_text.replace(img_match2.group(0), "")
+                        
                 # Escape unhandled < and > symbols to prevent HTML parse crashes
                 # We skip this for now since we generated exact HTML tags above.
                 
@@ -656,8 +679,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as tts_err:
                     logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
 
+                # Send generated image if one was intercepted
+                if image_url:
+                    try:
+                        await context.bot.send_photo(chat_id=chat_id, photo=image_url, reply_to_message_id=update.message.message_id)
+                        logging.info(f"✅ AI Image sent to {user_name} successfully.")
+                    except Exception as img_err:
+                        logging.error(f"Failed to send pollination image: {img_err}")
+                        formatted_text += f"\n\n[Failed to send image: {img_err}]"
+
                 # Always send text too
-                if not voice_sent:
+                if not voice_sent and formatted_text.strip():
                     # Smart paragraph chunker to avoid cutting middle of words or HTML tags
                     paragraphs = formatted_text.split('\n')
                     chunks = []
