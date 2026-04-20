@@ -82,6 +82,29 @@ You have the power to instantly conjure images! If the admins ask you to generat
 <a href="https://image.pollinations.ai/prompt/{url_encoded_detailed_description}?width=1024&height=1024&nologo=true">&#8205;</a>
 Replace {url_encoded_detailed_description} with a highly descriptive, comma-separated image prompt (with spaces replaced by %20). Do not complain about not being able to draw. You CAN draw using this magic spell."""
 
+MENU_TEXT = """🐾 <b>Welcome to Pupbot!</b> 🥂
+
+I'm your lively lounge host. Here's what I can do:
+• Chat with me directly and tag me!
+• Ask me to generate artwork!
+• Report issues to the devs.
+
+<i>Arf! Let's get this party started!</i>"""
+
+ANTIGRAVITY_MENU_TEXT = """⚡ <b>ANTIGRAVITY SYSTEMS ONLINE</b>
+
+Available commands for developers:
+• /ticket - Report structured bugs to GitHub
+• /ping - Send logic feedback
+
+<i>Awaiting commands.</i>"""
+
+ALCHEMY_MENU_TEXT = """🔮 <b>STIX MΛGIC ALCHEMY</b>
+
+Welcome to the lab!
+• Send me viral ideas or URLs
+• Draw assets or concept art!"""
+
 import db
 
 db.init_db()
