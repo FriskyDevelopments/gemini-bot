@@ -1,9 +1,31 @@
 import os
+import urllib.parse
+import hmac
+import hashlib
+import re
 import requests
 from flask import Flask, request, jsonify
 import google.generativeai as genai
 
 app = Flask(__name__)
+
+GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET")
+
+def verify_signature(data, signature):
+    """Verify that the payload was sent from GitHub by validating SHA256."""
+    if not GITHUB_WEBHOOK_SECRET:
+        print("CRITICAL: GITHUB_WEBHOOK_SECRET is not set. All webhooks will be rejected.")
+        return False
+    if not signature:
+        return False
+    try:
+        sha_name, sig = signature.split('=')
+        if sha_name != 'sha256':
+            return False
+        mac = hmac.new(GITHUB_WEBHOOK_SECRET.encode(), msg=data, digestmod=hashlib.sha256)
+        return hmac.compare_digest(mac.hexdigest(), sig)
+    except Exception:
+        return False
 
 # Configure Gemini
 try:
@@ -14,24 +36,47 @@ except Exception as e:
 
 GITHUB_TOKEN = os.environ.get("GITHUB_PUPBOT_TOKEN")
 
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
 @app.route("/", methods=["GET"])
 def index():
     return "Codepup GitHub Webhook is listening! Arf!"
 
 def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=False):
+    # SSRF Protection: Ensure we only request from trusted GitHub domains (HTTPS and github.com / api.github.com)
+    try:
+        parsed = urllib.parse.urlparse(diff_url_or_api)
+        if parsed.scheme != "https" or parsed.hostname not in ("api.github.com", "github.com"):
+            print(f"Blocked suspicious request to: {diff_url_or_api}")
+            return False
+    except Exception as e:
+        print(f"Error parsing URL '{diff_url_or_api}': {e}")
+        return False
+
+    # Security: Validate repo_full_name format (owner/repo)
+    if not re.match(r"^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$", repo_full_name):
+        print(f"Aborting: repo_full_name '{repo_full_name}' is invalid.")
+        return False
+
     headers = {}
     if GITHUB_TOKEN:
         headers['Authorization'] = f"token {GITHUB_TOKEN}"
     if use_api_header:
         headers['Accept'] = 'application/vnd.github.v3.diff'
-        
-    diff_resp = requests.get(diff_url_or_api, headers=headers)
+
+    diff_resp = requests.get(diff_url_or_api, headers=headers, timeout=10)
     if diff_resp.status_code != 200:
         print("Failed to get diff")
         return False
-        
+
     diff_text = diff_resp.text
-    
+
     prompt = f"""
     You are "Codepup", an elite AI code review assistant (superior to CodeRabbit).
     You are a highly capable senior developer with a playful pup persona, but extremely serious about code quality.
@@ -43,7 +88,7 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
     3. **Performance & Best Practices**: Suggest optimizations or cleaner patterns. Avoid nitpicks (e.g. trailing whitespaces).
     4. **Provide Fixes**: IMPORTANT - If you find an issue, provide the EXACT code fix using Github code suggestion markdown format (i.e. ` ```suggestion `) or standard diff blocks so the developer can easily copy/paste or apply it.
 
-    Keep the tone encouraging, elite, and slightly playful (maybe one 'Arf!' or tail wag compliment). 
+    Keep the tone encouraging, elite, and slightly playful (maybe one 'Arf!' or tail wag compliment).
 
     Here is the diff:
     {diff_text}
@@ -52,12 +97,12 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
         print(f"Analyzing PR #{pr_number} with Codepup (Gemini)...")
         ai_response = model.generate_content(prompt)
         review_comment = f"🐶 **Codepup Review** 🐾\n\n{ai_response.text}"
-        
+
         if GITHUB_TOKEN:
             comment_url = f"https://api.github.com/repos/{repo_full_name}/issues/{pr_number}/comments"
             # Remove the Accept header for posting the comment
             post_headers = {'Authorization': f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment})
+            res = requests.post(comment_url, headers=post_headers, json={"body": review_comment}, timeout=10)
             if res.status_code == 201:
                 print(f"Successfully posted review to PR #{pr_number}")
                 return True
@@ -72,6 +117,12 @@ def perform_review(pr_number, diff_url_or_api, repo_full_name, use_api_header=Fa
 
 @app.route("/github-webhook", methods=["POST"])
 def github_webhook():
+    signature = request.headers.get('X-Hub-Signature-256')
+    payload_body = request.get_data()
+
+    if not verify_signature(payload_body, signature):
+        return jsonify({"error": "Invalid signature"}), 403
+
     event = request.headers.get('X-GitHub-Event')
     payload = request.json
 
@@ -83,9 +134,9 @@ def github_webhook():
         diff_url = pr["diff_url"]
         repo_full_name = payload["repository"]["full_name"]
         pr_number = pr["number"]
-        
+
         perform_review(pr_number, diff_url, repo_full_name)
-        
+
     # 2. Listen for manual trigger via comments (@pupbot or /pupbot)
     elif event == "issue_comment" and payload.get("action") == "created":
         comment_body = payload["comment"]["body"].lower()

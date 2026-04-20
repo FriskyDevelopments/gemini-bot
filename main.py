@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 import threading
@@ -11,6 +12,7 @@ import subprocess
 import urllib.request
 import urllib.parse
 import io
+import html
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CallbackQueryHandler, filters
@@ -28,7 +30,7 @@ except Exception as e:
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 ALPHA = os.getenv("ALPHA_USER_ID", "8091939499")
-EXTRA_ALPHAS = ["7758239683"]
+EXTRA_ALPHAS = [uid.strip() for uid in os.getenv("EXTRA_ALPHA_IDS", "").split(",") if uid.strip()]
 ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
@@ -68,7 +70,8 @@ You have the power to instantly conjure images! If the user asks you to generate
 <a href="https://image.pollinations.ai/prompt/{url_encoded_detailed_description}?width=1024&height=1024&nologo=true">&#8205;</a>
 Replace {url_encoded_detailed_description} with a highly descriptive, comma-separated image prompt (with spaces replaced by %20). Do not complain about not being able to draw. You CAN draw using this magic spell.
 
-🐾 Forged with a frisky paw and a daring heart. ✨"""
+🐾 Forged with a frisky paw and a daring heart.
+Bringing the magic of STIX MΛGIC to life ✨"""
 
 import db
 
@@ -158,9 +161,9 @@ def snag_engine():
             url = f"https://api.telegram.org/bot{token}/sendMessage"
             data = urllib.parse.urlencode({"chat_id": pup_chat_id, "text": msg}).encode()
             try:
-                urllib.request.urlopen(url, data=data)
+                urllib.request.urlopen(url, data=data, timeout=10)
             except Exception as e:
-                logging.info("Failed to notify:", e)
+                logging.info(f"Failed to notify: {e}")
                 
             break
             
@@ -206,7 +209,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 invitations[str(member.id)] = inviter_name
                 save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text=f"Arf arf!! 🐾 Welcome to the Pup Lounge, {member.first_name}! 🥂✨ I'm Pupbot, your host! Grab a bowl, stretch those paws, and give the pack a bark! Who's ready to play?")
+                keyboard = [[InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"Arf arf!! 🐾 Welcome to the Pup Lounge, {member.first_name}! 🥂✨ I'm Pupbot, your host! Grab a bowl, stretch those paws, and give the pack a bark! Who's ready to play?",
+                    reply_markup=reply_markup
+                )
             except Exception as e: logging.debug(f"Ignored error: {e}")
         return
 
@@ -215,26 +224,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text.strip()
         text_lower = text.lower()
         
-        if text_lower == "/menu" or text_lower == "/help":
-            menu_text = (
-                "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
-                "<b>🎭 Personas & Modes</b>\n"
-                "  • <code>/alchemy</code> - Summon the Λlchemy Curator Wizard\n"
-                "  • <code>/antigravity</code> - Summon the Antigravity Developer Core\n\n"
-                "<b>🛠️ System & Debugging</b>\n"
-                "  • <code>/ticket</code> - Open the Jules Bug Reporter\n"
-                "  • <code>/ping</code> - Quick feedback & Help Menu\n"
-                "  • <code>/ping &lt;msg&gt;</code> - Send instant feedback\n\n"
-                "<b>🔐 Alpha / Admin Only</b>\n"
-                "  • <code>/authorize_group</code> - Allow Pupbot to speak\n"
-                "  • <code>/add_debugger &lt;id&gt;</code> - Grant Reporter access\n\n"
-                "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>"
-            )
+        if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
             try:
-                await context.bot.send_message(chat_id=chat_id, text=menu_text, parse_mode="HTML")
+                active_menu = MENU_TEXT
+                if chat_id in antigravity_chats:
+                    active_menu = ANTIGRAVITY_MENU_TEXT
+                elif chat_id in alchemy_chats:
+                    active_menu = ALCHEMY_MENU_TEXT
+                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML")
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
-                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: {e}")
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Could not render the menu. Please try again later.", parse_mode="HTML")
             return
 
         # Command to add debuggers
@@ -273,7 +273,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             try:
                 doppler_cli = os.getenv("DOPPLER_CLI", "doppler")
-                subprocess.run([doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", "friskyghost", "-c", "dev"], check=True)
+                doppler_project = os.getenv("DOPPLER_PROJECT")
+                if not doppler_project:
+                    raise ValueError("DOPPLER_PROJECT environment variable is not set.")
+                subprocess.run([doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", doppler_project, "-c", "dev"], check=True)
                 await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML")
             except Exception as e:
                 try:
@@ -281,7 +284,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
                     await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!\n<i>(Local fallback saved)</i>", parse_mode="HTML")
                 except Exception as e2:
-                    await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Added to memory, but failed to save permanently: `{e2}`")
+                    await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML")
             return
 
         # Antigravity developer mode toggle (Private DM Only, unless bypassed)
@@ -301,7 +304,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_states[user_id] = "antigravity_bypass"
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter bypass password to summon Antigravity into this communal chat:</i>", parse_mode="HTML")
+                    keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter bypass password to summon Antigravity into this communal chat:</i>",
+                        parse_mode="HTML",
+                        reply_markup=reply_markup
+                    )
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -343,14 +353,15 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
                      InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
                     [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
-                     InlineKeyboardButton("Other", callback_data="ticket_proj:Other")]
+                     InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
+                    [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
                 try:
                     await context.bot.send_message(
                         chat_id=chat_id, 
-                        text="👔 **Jules Diagnostic Interface**\n_(Use this strictly to submit detailed, project-specific bugs.)_\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich **Project** is this bug affecting?", 
+                        text="👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
                         parse_mode="HTML",
                         reply_markup=reply_markup
                     )
@@ -363,7 +374,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Start Ticketing
         if text_lower.startswith("/ping"):
-            comment = text[5:].strip()
+            comment = text[5:].strip()[:500]
             if comment:
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
@@ -372,7 +383,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"Ping Feedback from @{username}", "body": comment, "labels": ["feedback", "pupbot-routed"]}
                     try:
                         import httpx
-                        async with httpx.AsyncClient() as client:
+                        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+                        async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
                         logging.error(f"Github push error: {e}")
@@ -414,7 +426,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # 2. Telegram Channel Pipeline
                 if MAIN_GROUP_ID:
-                    await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=f"📢 <b>PUPPY PROMO!</b> 🐾\n\n{promo_data.get('channel_promo', 'Upgrade to Clipsflow PRO!')}", parse_mode="HTML")
+                    promo_text = html.escape(promo_data.get('channel_promo', 'Upgrade to Clipsflow PRO!'))
+                    await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=f"📢 <b>PUPPY PROMO!</b> 🐾\n\n{promo_text}", parse_mode="HTML")
                 
                 # 3. The X/Twitter Pipeline
                 try:
@@ -453,9 +466,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     dm_status = f"⚠️ DM matrix failed: {e}"
 
-                await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{twitter_status}\n{dm_status}", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
             except Exception as promo_err:
-                await context.bot.send_message(chat_id=chat_id, text=f"❌ Promo generation failed: {promo_err}")
+                logging.error(f"Promo generation failed: {promo_err}")
+                await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> Could not generate the broadcast at this time.")
             return
 
         # In-Progress Ticketing
@@ -472,10 +486,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
                 if "ghost" in text_lower:
-                    try:
-                        await update.message.delete()
-                    except: pass
-                    
                     antigravity_chats.add(chat_id)
                     if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
                     del ticket_states[user_id]
@@ -493,12 +503,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif state == "ping_comment_entry":
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
+                comment_text = text[:500]
                 if github_token:
                     headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
-                    data = {"title": f"Logic Comment from @{username}", "body": text, "labels": ["feedback", "pupbot-routed"]}
+                    data = {"title": f"Logic Comment from @{username}", "body": comment_text, "labels": ["feedback", "pupbot-routed"]}
                     try:
                         import httpx
-                        async with httpx.AsyncClient() as client:
+                        async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
                         logging.error(f"Github push error: {e}")
@@ -510,16 +521,28 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "project_other":
-                ticket_data[user_id] = {"project": text}
+                project = re.sub(r'[^a-zA-Z0-9._-]', '', text)
+                if not project or project in (".", ".."):
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="⚠️ Invalid project name. Please use alphanumeric, dots, underscores, and dashes only.")
+                    except: pass
+                    return
+                ticket_data[user_id] = {"project": project}
                 ticket_states[user_id] = "desc"
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to `{text}`.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
+                    safe_project = html.escape(project)
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
-                project = ticket_data[user_id]["project"]
-                desc = text
+                # Sanitize project name to prevent path traversal in GitHub URL construction
+                # Use a strict whitelist regex: only alphanumeric, dots, underscores, and dashes allowed.
+                raw_project = ticket_data[user_id]["project"]
+                project = re.sub(r'[^a-zA-Z0-9._-]', '', raw_project)
+                if not project or project in (".", ".."):
+                    project = "gemini-bot" # Fallback
+                desc = text[:2000]
                 username = update.effective_user.username or str(user_id)
                 # Dynamic Routing based on exact project name matching the Repo Name
                 url = f"https://api.github.com/repos/FriskyDevelopments/{project}/issues"
@@ -529,7 +552,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"[{project}] Ticket from @{username}", "body": f"**Project Scope:** {project}\n**Reporter:** @{username}\n\n**Issue Details:**\n{desc}", "labels": ["bug", "pupbot-routed"]}
                     try:
                         import httpx
-                        async with httpx.AsyncClient() as client:
+                        async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e: 
                         logging.error(f"Github push error: {e}")
@@ -538,7 +561,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_data.pop(user_id, None)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the `{project}` CI/CD pipeline.", parse_mode="HTML")
+                    safe_project = html.escape(project)
+                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the <code>{safe_project}</code> CI/CD pipeline.", parse_mode="HTML")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
 
@@ -611,14 +635,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
-            
-            prompt_list = [prompt]
-            if update.message.photo:
-                photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
-                img_bytes = await photo_file.download_as_bytearray()
-                prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
-                
-            response = await model.generate_content_async(prompt_list)
+            response = await model.generate_content_async(prompt)
             
             # Catch safety blocking
             try:
@@ -664,7 +681,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     import httpx, io
                     await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
                     tts_text = reply_text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")[:4096]
-                    async with httpx.AsyncClient(timeout=30) as tts_client:
+                    async with httpx.AsyncClient(timeout=10) as tts_client:
                         tts_resp = await tts_client.post(
                             "https://api.groq.com/openai/v1/audio/speech",
                             headers={"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}", "Content-Type": "application/json"},
@@ -679,25 +696,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as tts_err:
                     logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
 
-                # Send generated image if one was intercepted
-                if image_url:
-                    try:
-                        await context.bot.send_photo(chat_id=chat_id, photo=image_url, reply_to_message_id=update.message.message_id)
-                        logging.info(f"✅ AI Image sent to {user_name} successfully.")
-                    except Exception as img_err:
-                        logging.error(f"Failed to send pollination image: {img_err}")
-                        formatted_text += f"\n\n[Failed to send image: {img_err}]"
-
-                # Always send text too
-                if not voice_sent and formatted_text.strip():
-                    # Smart paragraph chunker to avoid cutting middle of words or HTML tags
-                    paragraphs = formatted_text.split('\n')
-                    chunks = []
-                    current_chunk = ""
-                    for p in paragraphs:
-                        if len(current_chunk) + len(p) + 1 > 3900:
-                            if current_chunk: chunks.append(current_chunk.strip())
-                            current_chunk = p + "\n"
+                # Always send text too (readable on desktop / if voice failed)
+                if not voice_sent:
+                    max_len = 4000
+                    for i in range(0, len(reply_text), max_len):
+                        chunk = reply_text[i:i+max_len]
+                        if i == 0:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk, reply_to_message_id=update.message.message_id)
                         else:
                             current_chunk += p + "\n"
                     if current_chunk:
@@ -713,10 +718,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             # Fallback if HTML parser crashes
                             await context.bot.send_message(chat_id=chat_id, text=chunk)
                     logging.info(f"✅ AI Text responded back to {user_name} successfully.")
+                # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
-            import html
-            safe_error = html.escape(str(e))
-            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{safe_error}</code>"
+            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{e}</code>"
             try:
                 await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode="HTML")
             except: pass
@@ -746,14 +750,61 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
+
+    if query.data == "show_menu":
+        await query.answer()
+        active_menu = MENU_TEXT
+        if chat_id in antigravity_chats:
+            active_menu = ANTIGRAVITY_MENU_TEXT
+        elif chat_id in alchemy_chats:
+            active_menu = ALCHEMY_MENU_TEXT
+        await query.edit_message_text(active_menu, parse_mode="HTML")
+        return
+
+    if query.data == "ping_back":
+        ticket_states.pop(user_id, None)
+        save_state()
+        await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
+            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
+            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+        ]
+        await query.edit_message_text("✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    if query.data == "ticket_back":
+        ticket_states[user_id] = "project"
+        ticket_data.pop(user_id, None)
+        save_state()
+        await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
+             InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
+            [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
+             InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+        ]
+        await query.edit_message_text(
+            "👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
     
     if query.data == "ping_comment":
         ticket_states[user_id] = "ping_comment_entry"
         save_state()
         await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back"),
+             InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 **Logic Feedback:**\nPlease type your comment about the logic. It will be logged to GitHub.",
-            parse_mode="HTML"
+            "👔 <b>Logic Feedback:</b>\nPlease type your comment about the logic. It will be logged to GitHub.",
+            parse_mode="HTML",
+            reply_markup=reply_markup
         )
         return
 
@@ -765,7 +816,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
             data = {"title": f"🚨 EMERGENCY: Clipsflow Unresponsive (Reported by @{username})", "body": f"**Status:** Bot is dead / not responding to commands.\n**Reporter:** @{username}", "labels": ["bug", "critical", "pupbot-routed"]}
             try:
-                async with httpx.AsyncClient() as client:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+                async with httpx.AsyncClient(timeout=10) as client:
                     await client.post(url, headers=headers, json=data)
             except Exception as e: 
                 logging.error(f"Github push error: {e}")
@@ -776,18 +828,27 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "ping_help":
         help_text = (
-            "✅ **JULES SYSTEM: ONLINE.**\n\n"
-            "**Tester Guide:**\n"
-            "• Use `📝 Add Logic Comment` for fast feedback.\n"
-            "• Use `🚨 Report Bot Unresponsive` if Clipsflow is totally dead.\n"
-            "• Type `/ticket` if you need to submit a descriptive bug."
+            "✅ <b>JULES SYSTEM: ONLINE.</b>\n\n"
+            "<b>Tester Guide:</b>\n"
+            "• Use <code>📝 Add Logic Comment</code> for fast feedback.\n"
+            "• Use <code>🚨 Report Bot Unresponsive</code> if Clipsflow is totally dead.\n"
+            "• Type <code>/ticket</code> if you need to submit a descriptive bug."
         )
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
-            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")]
+            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")]
         ]
         await query.answer()
         await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    if query.data == "ticket_cancel":
+        ticket_states.pop(user_id, None)
+        ticket_data.pop(user_id, None)
+        save_state()
+        await query.answer()
+        await query.edit_message_text("🛑 Ticketing flow cancelled.")
         return
 
     if not query.data.startswith("ticket_proj:"):
@@ -803,9 +864,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_states[user_id] = "project_other"
         save_state()
         await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("⬅️ Back", callback_data="ticket_back"),
+             InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 **Manual Override**\nPlease type the name of the project or repository this bug belongs to:",
-            parse_mode="HTML"
+            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:",
+            parse_mode="HTML",
+            reply_markup=reply_markup
         )
         return
 
@@ -814,10 +881,17 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_state()
     
     await query.answer()
+    keyboard = [
+        [InlineKeyboardButton("⬅️ Back", callback_data="ticket_back"),
+         InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    safe_repo = html.escape(repo_name)
     await query.edit_message_text(
-        f"👔 Project locked to `{repo_name}` repository.\n\n"
+        f"👔 Project locked to <code>{safe_repo}</code> repository.\n\n"
         "Now, please provide a detailed description of the bug.",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=reply_markup
     )
 
 if __name__ == '__main__':
