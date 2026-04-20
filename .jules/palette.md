@@ -23,3 +23,11 @@
 ## 2026-05-10 - [Non-Destructive Navigation]
 **Learning:** In multi-step interactive flows (like bug reporting or feedback), "Cancel" buttons are necessary but can be frustrating if the user only wants to correct a minor mistake.
 **Action:** Implement "⬅️ Back" buttons in nested sub-menus to allow users to return to the previous state without destroying their session progress.
+
+## 2026-05-15 - [Ephemeral UI Dismissibility]
+**Learning:** Ephemeral menus, such as help guides or status reports, can quickly clutter a Telegram chat's history. Providing a way to "clean up" the bot's presence after an interaction is a high-value micro-UX touch.
+**Action:** Implement a 'Close' button that calls `query.delete_message()` for all major menus and status alerts.
+
+## 2026-05-15 - [Proactive Input Guidance]
+**Learning:** Technical constraints (like character limits for GitHub issues) are often invisible to users until a failure occurs. Communicating these limits *at the point of entry* reduces frustration and prevents data loss.
+**Action:** Always include character limit hints (e.g., "max 500 characters") in conversational prompts and provide immediate feedback if the limit is exceeded.
