@@ -270,7 +270,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML")
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
-                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: <code>{html.escape(str(e))}</code>", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Could not render the menu. Please try again later.", parse_mode="HTML")
             return
 
         # Command to add debuggers
@@ -320,7 +320,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
                     await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!\n<i>(Local fallback saved)</i>", parse_mode="HTML")
                 except Exception as e2:
-                    await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Added to memory, but failed to save permanently: <code>{html.escape(str(e2))}</code>", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML")
             return
 
         # Antigravity developer mode toggle (Private DM Only, unless bypassed)
@@ -409,7 +409,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Start Ticketing
         if text_lower.startswith("/ping"):
-            comment = text[5:].strip()
+            comment = text[5:].strip()[:500]
             if comment:
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
@@ -419,7 +419,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         import httpx
                         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-                        async with httpx.AsyncClient() as client:
+                        async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
                         logging.error(f"Github push error: {e}")
@@ -503,7 +503,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
             except Exception as promo_err:
-                await context.bot.send_message(chat_id=chat_id, text=f"❌ Promo generation failed: {promo_err}")
+                logging.error(f"Promo generation failed: {promo_err}")
+                await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> Could not generate the broadcast at this time.")
             return
 
         # In-Progress Ticketing
@@ -538,12 +539,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif state == "ping_comment_entry":
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
+                comment_text = text[:500]
                 if github_token:
                     headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
-                    data = {"title": f"Logic Comment from @{username}", "body": text, "labels": ["feedback", "pupbot-routed"]}
+                    data = {"title": f"Logic Comment from @{username}", "body": comment_text, "labels": ["feedback", "pupbot-routed"]}
                     try:
                         import httpx
-                        async with httpx.AsyncClient() as client:
+                        async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
                         logging.error(f"Github push error: {e}")
@@ -555,11 +557,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "project_other":
-                ticket_data[user_id] = {"project": text}
+                project = re.sub(r'[^a-zA-Z0-9._-]', '', text)
+                if not project or project in (".", ".."):
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="⚠️ Invalid project name. Please use alphanumeric, dots, underscores, and dashes only.")
+                    except: pass
+                    return
+                ticket_data[user_id] = {"project": project}
                 ticket_states[user_id] = "desc"
                 save_state()
                 try:
-                    safe_project = html.escape(text)
+                    safe_project = html.escape(project)
                     await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
@@ -568,7 +576,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Use a strict whitelist regex: only alphanumeric, dots, underscores, and dashes allowed.
                 raw_project = ticket_data[user_id]["project"]
                 project = re.sub(r'[^a-zA-Z0-9._-]', '', raw_project)
-                desc = text
+                if not project or project in (".", ".."):
+                    project = "gemini-bot" # Fallback
+                desc = text[:2000]
                 username = update.effective_user.username or str(user_id)
                 # Dynamic Routing based on exact project name matching the Repo Name
                 url = f"https://api.github.com/repos/FriskyDevelopments/{project}/issues"
@@ -578,7 +588,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"[{project}] Ticket from @{username}", "body": f"**Project Scope:** {project}\n**Reporter:** @{username}\n\n**Issue Details:**\n{desc}", "labels": ["bug", "pupbot-routed"]}
                     try:
                         import httpx
-                        async with httpx.AsyncClient() as client:
+                        async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e: 
                         logging.error(f"Github push error: {e}")
@@ -666,7 +676,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
                     # Strip markdown symbols for cleaner TTS audio
                     tts_text = reply_text.replace("*", "").replace("_", "").replace("`", "").replace("#", "")[:4096]
-                    async with httpx.AsyncClient(timeout=30) as tts_client:
+                    async with httpx.AsyncClient(timeout=10) as tts_client:
                         tts_resp = await tts_client.post(
                             "https://api.groq.com/openai/v1/audio/speech",
                             headers={"Authorization": f"Bearer {groq_api_key}", "Content-Type": "application/json"},
@@ -699,7 +709,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.info(f"✅ AI Text responded back to {user_name} successfully.")
                 # ─────────────────────────────────────────────────────────────── #
         except Exception as e:
-            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{html.escape(str(e))}</code>"
+            error_msg = "❌ <b>AI Engine Fault:</b> Could not process the request. Please try again later."
             try:
                 await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode="HTML")
             except: pass
@@ -796,7 +806,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = {"title": f"🚨 EMERGENCY: Clipsflow Unresponsive (Reported by @{username})", "body": f"**Status:** Bot is dead / not responding to commands.\n**Reporter:** @{username}", "labels": ["bug", "critical", "pupbot-routed"]}
             try:
                 await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=10) as client:
                     await client.post(url, headers=headers, json=data)
             except Exception as e: 
                 logging.error(f"Github push error: {e}")
