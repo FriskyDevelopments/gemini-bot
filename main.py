@@ -9,6 +9,8 @@ import asyncio
 import json
 import random
 import subprocess
+import secrets
+import string
 import urllib.request
 import urllib.parse
 import io
@@ -73,10 +75,12 @@ Replace {url_encoded_detailed_description} with a highly descriptive, comma-sepa
 🐾 Forged with a frisky paw and a daring heart.
 Bringing the magic of STIX MΛGIC to life ✨"""
 
-ADMIN_PUPSONA_PROMPT = """You are Geminipupbot's elite 'Admin Lounge Pupsona'. 
-You are an exclusive, hyper-intelligent pup that manages the backstage of the party. 
-You help the admins (Alphas) manage the main lounge, strategize promos, write announcements, and generate ideas. 
-You still retain a playful, pup-like energy (barks, ear scratches) but you are highly focused on assisting the admins with their tasks, creating cool artwork, and managing the community.
+ADMIN_ASSISTANT_PROMPT = """You are Geminipupbot's elite Admin Assistant.
+You assist Alphas with operations, moderation planning, promo drafting, launches, and tactical execution.
+You are concise, practical, and focused on outcomes.
+Never mirror or parrot the user input. Transform requests into useful outputs with clear next steps.
+If speaking to the owner/alpha, acknowledge priority and optimize around their intent.
+Keep playful flair minimal unless explicitly asked.
 
 GRAPHICAL ABILITIES (IMAGE GENERATION)
 You have the power to instantly conjure images! If the admins ask you to generate, draw, or create an image, promo graphic, or visual concept, you MUST output this exact HTML block in your response:
@@ -91,10 +95,15 @@ I'm your lively lounge host. Here are my commands:
 • /ticket - Open the bug reporter (Debuggers)
 
 👑 <b>Admin / Alpha Commands:</b>
+• /admin_assistant - Toggle operations assistant persona
 • /antigravity - Toggle developer mode
 • /alchemy - Toggle creative wizard mode
 • /relay - Broadcast to the Main Lounge
 • /invite - Generate a 1-use invite link
+• /link_group - Generate secure linking code (admin lounge)
+• /link_group CODE - Complete secure link from target group
+• /groups - Show linked target groups
+• /unlink_group CHAT_ID - Remove linked target group
 • /authorize_group - Authorize current group
 • /add_debugger [id] - Add a ticket debugger
 
@@ -114,6 +123,13 @@ Welcome to the lab!
 • Send me viral ideas or URLs
 • Draw assets or concept art!"""
 
+ADMIN_ASSISTANT_MENU_TEXT = """🛠️ <b>ADMIN ASSISTANT ONLINE</b>
+
+Operational tools for Alphas:
+• Draft promos and announcements
+• Build moderation plans and workflows
+• Create step-by-step execution checklists"""
+
 import db
 
 db.init_db()
@@ -121,12 +137,21 @@ db.init_db()
 jules_chats = set(db.get_val("jules_chats", []))
 antigravity_chats = set(db.get_val("antigravity_chats", []))
 alchemy_chats = set(db.get_val("alchemy_chats", []))
+admin_assistant_chats = set(db.get_val("admin_assistant_chats", []))
 relay_chats = set(db.get_val("relay_chats", []))
 debuggers = set(db.get_val("debuggers", [ALPHA]))
 ticket_states = dict(db.get_val("ticket_states", {}))
 ticket_data = dict(db.get_val("ticket_data", {}))
 invitations = dict(db.get_val("invitations", {}))
+linked_groups = set(db.get_val("linked_groups", []))
+link_codes = dict(db.get_val("link_codes", {}))
+dynamic_alpha_ids = set(db.get_val("dynamic_alpha_ids", []))
 relay_drafts = {}
+
+CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
+LINK_CODE_TTL_SECONDS = int(os.getenv("LINK_CODE_TTL_SECONDS", "900"))
+ADMIN_OWNER_REFRESH_SECONDS = int(os.getenv("ADMIN_OWNER_REFRESH_SECONDS", "300"))
+admin_owner_last_refresh = 0.0
 
 CLOSE_BUTTON = InlineKeyboardButton("🗑️ Close", callback_data="close_message")
 CLOSE_KEYBOARD = InlineKeyboardMarkup([[CLOSE_BUTTON]])
@@ -135,11 +160,159 @@ def save_state():
     db.set_val("jules_chats", list(jules_chats))
     db.set_val("antigravity_chats", list(antigravity_chats))
     db.set_val("alchemy_chats", list(alchemy_chats))
+    db.set_val("admin_assistant_chats", list(admin_assistant_chats))
     db.set_val("relay_chats", list(relay_chats))
     db.set_val("debuggers", list(debuggers))
     db.set_val("ticket_states", ticket_states)
     db.set_val("ticket_data", ticket_data)
     db.set_val("invitations", invitations)
+    db.set_val("linked_groups", list(linked_groups))
+    db.set_val("link_codes", link_codes)
+    db.set_val("dynamic_alpha_ids", list(dynamic_alpha_ids))
+
+
+def _safe_chat_id(value):
+    return str(value) if value is not None else ""
+
+
+def _read_authorized_groups():
+    raw_groups = os.environ.get("AUTHORIZED_GROUPS", "")
+    return [g.strip() for g in raw_groups.split(",") if g.strip()]
+
+
+def _write_authorized_groups(authorized_groups):
+    unique_groups = sorted(set(_safe_chat_id(g) for g in authorized_groups if g))
+    new_list_str = ",".join(unique_groups)
+    os.environ["AUTHORIZED_GROUPS"] = new_list_str
+    try:
+        doppler_cli = os.getenv("DOPPLER_CLI", "doppler")
+        doppler_project = os.getenv("DOPPLER_PROJECT")
+        if not doppler_project:
+            raise ValueError("DOPPLER_PROJECT environment variable is not set.")
+        subprocess.run(
+            [doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", doppler_project, "-c", "dev"],
+            check=True,
+        )
+        return True
+    except Exception:
+        try:
+            with open(env_path, "a") as f:
+                f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
+            return True
+        except Exception:
+            return False
+
+
+def _authorize_group_local(chat_id):
+    chat_id = _safe_chat_id(chat_id)
+    groups = _read_authorized_groups()
+    if chat_id not in groups:
+        groups.append(chat_id)
+    return _write_authorized_groups(groups)
+
+
+def _deauthorize_group_local(chat_id):
+    chat_id = _safe_chat_id(chat_id)
+    groups = [g for g in _read_authorized_groups() if g != chat_id]
+    return _write_authorized_groups(groups)
+
+
+def get_primary_target_group():
+    configured = _safe_chat_id(os.getenv("MAIN_GROUP_ID") or MAIN_GROUP_ID)
+    if configured:
+        return configured
+    if linked_groups:
+        return sorted(linked_groups)[0]
+    return None
+
+
+def cleanup_expired_link_codes():
+    now = int(time.time())
+    expired_codes = [code for code, payload in link_codes.items() if payload.get("expires_at", 0) <= now]
+    for code in expired_codes:
+        del link_codes[code]
+    if expired_codes:
+        save_state()
+
+
+def create_link_code(admin_chat_id, issuer_user_id):
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(20):
+        code = "".join(secrets.choice(alphabet) for _ in range(8))
+        if code not in link_codes:
+            link_codes[code] = {
+                "admin_chat_id": _safe_chat_id(admin_chat_id),
+                "issuer_user_id": _safe_chat_id(issuer_user_id),
+                "created_at": int(time.time()),
+                "expires_at": int(time.time()) + LINK_CODE_TTL_SECONDS,
+            }
+            save_state()
+            return code
+    return None
+
+
+def get_mode(chat_id):
+    chat_id = _safe_chat_id(chat_id)
+    if chat_id in antigravity_chats:
+        return "antigravity"
+    if chat_id in alchemy_chats:
+        return "alchemy"
+    if chat_id in admin_assistant_chats:
+        return "admin_assistant"
+    return "puppy"
+
+
+def prevent_echo_reply(mode_name, user_text, reply_text):
+    def normalize_text(value):
+        return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+    user_norm = normalize_text(user_text)
+    reply_norm = normalize_text(reply_text)
+    too_similar = bool(user_norm) and (user_norm == reply_norm or (reply_norm.startswith(user_norm) and len(reply_norm) <= len(user_norm) + 20))
+
+    if mode_name == "antigravity" and too_similar:
+        return "Antigravity online. I can help immediately—share the target outcome, technical stack, constraints, and deadline."
+    if mode_name == "alchemy" and too_similar:
+        return "✨ Alchemy Curator engaged. Give me the goal and vibe, and I will craft polished promo copy with 3 distinct creative options."
+    if mode_name == "admin_assistant" and too_similar:
+        return "🛠️ Admin Assistant active. I can draft your promo, moderation script, or action plan now—tell me which output you want first."
+    return reply_text
+
+
+async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
+    global admin_owner_last_refresh
+    if not ADMIN_LOUNGE_ID:
+        return
+    now = time.time()
+    if (now - admin_owner_last_refresh) < ADMIN_OWNER_REFRESH_SECONDS and dynamic_alpha_ids:
+        return
+    admin_owner_last_refresh = now
+    try:
+        admins = await context.bot.get_chat_administrators(chat_id=ADMIN_LOUNGE_ID)
+        changed = False
+        for admin in admins:
+            if getattr(admin, "status", "") == "creator":
+                uid = _safe_chat_id(admin.user.id)
+                if uid not in dynamic_alpha_ids:
+                    dynamic_alpha_ids.add(uid)
+                    changed = True
+        if changed:
+            save_state()
+    except Exception as e:
+        logging.debug(f"Could not refresh admin owner ids: {e}")
+
+
+async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
+    uid = _safe_chat_id(user_id)
+    if uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids:
+        return True
+    await refresh_dynamic_alpha_ids(context)
+    return uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids
+
+
+def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+    role = "Owner/Alpha" if is_alpha else "Lounge member"
+    return f"{user_name} ({user_id}) - {role}"
 
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN") or os.getenv("GITHUB_TOKEN")
 
@@ -339,6 +512,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = str(update.effective_user.id)
     chat_id = str(update.effective_chat.id)
+    is_alpha = await is_alpha_user(context, user_id)
+    cleanup_expired_link_codes()
     
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
     if update.message.new_chat_members:
@@ -386,7 +561,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Command to add debuggers
         if text_lower.startswith("/add_debugger"):
-            if user_id == ALPHA or user_id in EXTRA_ALPHAS:
+            if is_alpha:
                 parts = text.split()
                 if len(parts) > 1:
                     debuggers.add(parts[1])
@@ -402,41 +577,139 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Command to authorize groups
         if text_lower == "/authorize_group":
-            if user_id != ALPHA and user_id not in EXTRA_ALPHAS:
+            if not is_alpha:
                 return
-            
-            raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
-            authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
-            
+            authorized_groups = _read_authorized_groups()
             if chat_id in authorized_groups:
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="🐶 This group is already authorized!")
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
-                
-            authorized_groups.append(chat_id)
-            new_list_str = ",".join(authorized_groups)
-            os.environ["AUTHORIZED_GROUPS"] = new_list_str
-            
-            try:
-                doppler_cli = os.getenv("DOPPLER_CLI", "doppler")
-                doppler_project = os.getenv("DOPPLER_PROJECT")
-                if not doppler_project:
-                    raise ValueError("DOPPLER_PROJECT environment variable is not set.")
-                subprocess.run([doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", doppler_project, "-c", "dev"], check=True)
+            if _authorize_group_local(chat_id):
                 await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML")
+            else:
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML")
+            return
+
+        if text_lower == "/admin_assistant":
+            if not is_alpha:
+                return
+            if chat_id in admin_assistant_chats:
+                admin_assistant_chats.remove(chat_id)
+                save_state()
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML")
+                return
+            admin_assistant_chats.add(chat_id)
+            antigravity_chats.discard(chat_id)
+            alchemy_chats.discard(chat_id)
+            save_state()
+            await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML")
+            return
+
+        if text_lower.startswith("/link_group"):
+            if not is_alpha:
+                return
+            parts = text.split(maxsplit=1)
+            if len(parts) == 1:
+                if _safe_chat_id(chat_id) != _safe_chat_id(ADMIN_LOUNGE_ID):
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="⛔ Run <code>/link_group</code> in the Admin Lounge first to create a handshake code.",
+                        parse_mode="HTML",
+                    )
+                    return
+                code = create_link_code(chat_id, user_id)
+                if not code:
+                    await context.bot.send_message(chat_id=chat_id, text="⚠️ Could not generate link code. Please retry.")
+                    return
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        "🔐 <b>Link code created.</b>\n"
+                        f"Code: <code>{code}</code>\n"
+                        "Now go to the target group and send:\n"
+                        f"<code>/link_group {code}</code>\n"
+                        f"This code expires in {LINK_CODE_TTL_SECONDS // 60} minutes."
+                    ),
+                    parse_mode="HTML",
+                )
+                return
+
+            submitted_code = parts[1].strip().upper()
+            link_payload = link_codes.get(submitted_code)
+            if not link_payload:
+                await context.bot.send_message(chat_id=chat_id, text="❌ Invalid or expired link code.")
+                return
+            if link_payload.get("expires_at", 0) < int(time.time()):
+                del link_codes[submitted_code]
+                save_state()
+                await context.bot.send_message(chat_id=chat_id, text="❌ Link code expired. Generate a new one in Admin Lounge.")
+                return
+            admin_chat_id = _safe_chat_id(link_payload.get("admin_chat_id"))
+            issuer_user_id = _safe_chat_id(link_payload.get("issuer_user_id"))
+            if _safe_chat_id(user_id) != issuer_user_id and not is_alpha:
+                await context.bot.send_message(chat_id=chat_id, text="⛔ Only the code issuer or an alpha can complete this link.")
+                return
+            target_chat_id = _safe_chat_id(chat_id)
+            if target_chat_id == admin_chat_id:
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ Send the code in the target group, not Admin Lounge.")
+                return
+
+            linked_groups.add(target_chat_id)
+            _authorize_group_local(target_chat_id)
+            del link_codes[submitted_code]
+            save_state()
+
+            await context.bot.send_message(
+                chat_id=target_chat_id,
+                text=f"✅ Linked to admin group <code>{admin_chat_id}</code> successfully.",
+                parse_mode="HTML",
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_chat_id,
+                    text=f"✅ Group linked: <code>{target_chat_id}</code>\nTotal linked groups: <b>{len(linked_groups)}</b>",
+                    parse_mode="HTML",
+                )
             except Exception as e:
-                try:
-                    with open(env_path, "a") as f:
-                        f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
-                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!\n<i>(Local fallback saved)</i>", parse_mode="HTML")
-                except Exception as e2:
-                    await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML")
+                logging.debug(f"Could not notify admin lounge about link completion: {e}")
+            return
+
+        if text_lower == "/groups":
+            if not is_alpha:
+                return
+            if not linked_groups:
+                await context.bot.send_message(chat_id=chat_id, text="No linked groups yet.")
+                return
+            groups_text = "\n".join(f"• <code>{gid}</code>" for gid in sorted(linked_groups))
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🔗 <b>Linked groups ({len(linked_groups)}):</b>\n{groups_text}",
+                parse_mode="HTML",
+            )
+            return
+
+        if text_lower.startswith("/unlink_group"):
+            if not is_alpha:
+                return
+            parts = text.split(maxsplit=1)
+            if len(parts) < 2:
+                await context.bot.send_message(chat_id=chat_id, text="Usage: /unlink_group <chat_id>")
+                return
+            target_chat_id = _safe_chat_id(parts[1].strip())
+            removed = target_chat_id in linked_groups
+            linked_groups.discard(target_chat_id)
+            _deauthorize_group_local(target_chat_id)
+            save_state()
+            if removed:
+                await context.bot.send_message(chat_id=chat_id, text=f"✅ Unlinked group <code>{target_chat_id}</code>.", parse_mode="HTML")
+            else:
+                await context.bot.send_message(chat_id=chat_id, text=f"ℹ️ Group <code>{target_chat_id}</code> was not linked.", parse_mode="HTML")
             return
 
         # Antigravity developer mode toggle (Private DM Only, unless bypassed)
         if text_lower == "/antigravity":
-            if user_id != ALPHA and user_id not in EXTRA_ALPHAS:
+            if not is_alpha:
                 return
                 
             if chat_id in antigravity_chats:
@@ -463,6 +736,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             antigravity_chats.add(chat_id)
+            alchemy_chats.discard(chat_id)
+            admin_assistant_chats.discard(chat_id)
             save_state()
             try:
                 await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML")
@@ -471,7 +746,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Alchemy Wizard Mode Toggle
         if text_lower == "/alchemy":
-            if user_id != ALPHA and user_id not in EXTRA_ALPHAS:
+            if not is_alpha:
                 return
                 
             if chat_id in alchemy_chats:
@@ -483,7 +758,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             alchemy_chats.add(chat_id)
-            if chat_id in antigravity_chats: antigravity_chats.remove(chat_id)
+            antigravity_chats.discard(chat_id)
+            admin_assistant_chats.discard(chat_id)
             save_state()
             try:
                 await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML")
@@ -492,7 +768,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         # Admin Relay Mode
         if text_lower == "/relay":
-            if str(chat_id) != str(ADMIN_LOUNGE_ID) and user_id != ALPHA:
+            if str(chat_id) != str(ADMIN_LOUNGE_ID) and not is_alpha:
                 return
             if chat_id in relay_chats:
                 relay_chats.remove(chat_id)
@@ -510,7 +786,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Generate Invite Link for Main Lounge
-        if text_lower == "/invite" and str(chat_id) == str(ADMIN_LOUNGE_ID):
+        if text_lower == "/invite" and (str(chat_id) == str(ADMIN_LOUNGE_ID) or is_alpha):
             if not MAIN_GROUP_ID:
                 try: await context.bot.send_message(chat_id=chat_id, text="⚠️ MAIN_GROUP_ID is not configured.")
                 except: pass
@@ -771,18 +1047,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.info(f"Could not send log report or delete message: {e}")
                 
     # 3. CONVERSATIONAL LOGIC
-    # Trigger if it's Frisky (Alpha), if the bot is mentioned by name, or if someone replies directly to the bot.
+    # Trigger if alpha/authorized, bot mention, direct reply, or occasional ambient reply.
     text_lower = (update.message.text or update.message.caption or "").lower()
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
-    
-    raw_groups = os.environ.get("AUTHORIZED_GROUPS", "")
-    authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
-    in_auth_group = chat_id in authorized_groups
-    
+    in_auth_group = chat_id in _read_authorized_groups() or chat_id in linked_groups
     has_text_or_photo = bool(update.message.text or update.message.photo)
     
-    if (user_id == ALPHA or user_id in EXTRA_ALPHAS or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and has_text_or_photo:
+    if (is_alpha or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and has_text_or_photo:
         user_text = update.message.text or update.message.caption or ""
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
@@ -790,18 +1062,24 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user_name = update.effective_user.first_name
+        identity_context = build_identity_context(user_name, user_id, is_alpha)
         
         logging.info(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
         
         try:
-            # Check if this chat is in antigravity mode (applies to ALL messages in the chat if active)
+            mode_name = get_mode(chat_id)
+            effective_mode = mode_name
             active_system_prompt = SYSTEM_PROMPT
-            
-            if chat_id in antigravity_chats:
+
+            if mode_name == "antigravity":
                 active_system_prompt = ANTIGRAVITY_PROMPT
-                prompt = f"{ANTIGRAVITY_PROMPT}\nUser: {user_name} ({user_id})\nMessage: {user_text}"
-            elif chat_id in alchemy_chats:
-                import re
+                prompt = (
+                    f"{ANTIGRAVITY_PROMPT}\n"
+                    f"[IDENTITY: {identity_context}]\n"
+                    "Respond as engineering copilot. Be specific and technically useful.\n"
+                    f"Message: {user_text}"
+                )
+            elif mode_name == "alchemy":
                 urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', user_text)
                 if urls:
                     catalog = db.get_val("alchemy_catalog", [])
@@ -810,19 +1088,47 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             catalog.append(url)
                     db.set_val("alchemy_catalog", catalog)
                     logging.info(f"🔮 Added {len(urls)} links to Alchemy Catalog.")
-                
                 active_system_prompt = ALCHEMY_PROMPT
-                prompt = f"{ALCHEMY_PROMPT}\nUser: {user_name} ({user_id})\nMessage: {user_text}"
+                prompt = (
+                    f"{ALCHEMY_PROMPT}\n"
+                    f"[IDENTITY: {identity_context}]\n"
+                    "Do not mirror user text. Transform it into polished creative output.\n"
+                    f"Message: {user_text}"
+                )
             elif str(chat_id) == str(ADMIN_LOUNGE_ID):
+                effective_mode = "admin_assistant"
                 if chat_id in relay_chats:
                     active_system_prompt = SYSTEM_PROMPT
-                    prompt = f"{SYSTEM_PROMPT}\n[SYSTEM NOTICE: You are triggered by an Admin, but your response is being broadcasted DIRECTLY to the Main Lounge! Address the main lounge guests/members, not the admin.]\nAdmin triggering you: {user_name}\nMessage: {user_text}"
+                    prompt = (
+                        f"{SYSTEM_PROMPT}\n"
+                        f"[SYSTEM NOTICE: Triggered by admin ({identity_context}) and broadcasted to Main Lounge. "
+                        "Address the main lounge directly, not the admin operator.]\n"
+                        f"Message: {user_text}"
+                    )
+                elif mode_name == "admin_assistant":
+                    active_system_prompt = ADMIN_ASSISTANT_PROMPT
+                    prompt = (
+                        f"{ADMIN_ASSISTANT_PROMPT}\n"
+                        f"[IDENTITY: {identity_context}]\n"
+                        "You are in admin operations mode. Prioritize execution-ready output.\n"
+                        f"Message: {user_text}"
+                    )
                 else:
-                    active_system_prompt = ADMIN_PUPSONA_PROMPT
-                    prompt = f"{ADMIN_PUPSONA_PROMPT}\n[SYSTEM NOTICE: You are speaking privately to the Admins in the backstage VIP lounge.]\nAdmin User: {user_name}\nMessage: {user_text}"
+                    active_system_prompt = ADMIN_ASSISTANT_PROMPT
+                    prompt = (
+                        f"{ADMIN_ASSISTANT_PROMPT}\n"
+                        f"[SYSTEM NOTICE: You are speaking privately to admins in the backstage lounge.]\n"
+                        f"[IDENTITY: {identity_context}]\n"
+                        f"Message: {user_text}"
+                    )
             else:
-                relationship = "Your ALPHA (Master/Owner)" if user_id == ALPHA else "A lounge member"
-                prompt = f"{SYSTEM_PROMPT}\nYou are currently talking to: {user_name} ({relationship}).\nUser: {user_text}"
+                relationship = "Your ALPHA (Owner)" if is_alpha else "A lounge member"
+                prompt = (
+                    f"{SYSTEM_PROMPT}\n"
+                    f"You are currently talking to: {user_name} ({relationship}).\n"
+                    "Never mirror the exact input; always advance the conversation.\n"
+                    f"User: {user_text}"
+                )
             
             import google.generativeai as genai
             gemini_key = os.getenv("GEMINI_API_KEY")
@@ -840,6 +1146,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Catch safety blocking
             try:
                 reply_text = response.text.replace("[DELETE]", "").strip()
+                reply_text = prevent_echo_reply(effective_mode, user_text, reply_text)
             except ValueError as ve:
                 reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
 
@@ -886,7 +1193,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 4. ADMIN RULE REMINDER
-    if (chat_id == ADMIN_LOUNGE_ID or user_id == ALPHA or user_id in EXTRA_ALPHAS) and update.message.text:
+    if (chat_id == ADMIN_LOUNGE_ID or is_alpha) and update.message.text:
         if "remind the group of the rules" in update.message.text.lower():
             if MAIN_GROUP_ID:
                 try:
