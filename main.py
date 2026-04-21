@@ -84,12 +84,20 @@ Replace {url_encoded_detailed_description} with a highly descriptive, comma-sepa
 
 MENU_TEXT = """🐾 <b>Welcome to Pupbot!</b> 🥂
 
-I'm your lively lounge host. Here's what I can do:
-• Chat with me directly and tag me!
-• Ask me to generate artwork!
-• Report issues to the devs.
+I'm your lively lounge host. Here are my commands:
+• /menu (or /help) - Show this menu
+• /ping [msg] - Send feedback to the dev team
+• /ticket - Open the bug reporter (Debuggers)
 
-<i>Arf! Let's get this party started!</i>"""
+👑 <b>Admin / Alpha Commands:</b>
+• /antigravity - Toggle developer mode
+• /alchemy - Toggle creative wizard mode
+• /relay - Broadcast to the Main Lounge
+• /invite - Generate a 1-use invite link
+• /authorize_group - Authorize current group
+• /add_debugger [id] - Add a ticket debugger
+
+<i>Arf! Start chatting or try a command!</i>"""
 
 ANTIGRAVITY_MENU_TEXT = """⚡ <b>ANTIGRAVITY SYSTEMS ONLINE</b>
 
