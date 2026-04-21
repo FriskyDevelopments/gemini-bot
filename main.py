@@ -358,6 +358,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1.5 DETERMINISTIC TICKETING (JULES)
     if update.message.text:
         text = update.message.text.strip()
+        
+        # Remove @botusername suffix for commands (e.g. /menu@GeminiPUPBot -> /menu)
+        parts = text.split(maxsplit=1)
+        if parts and parts[0].startswith("/"):
+            first_word = parts[0].split('@')[0]
+            text = first_word + (" " + parts[1] if len(parts) > 1 else "")
+            
         text_lower = text.lower()
         
         if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
@@ -586,7 +593,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 gemini_key = os.getenv("GEMINI_API_KEY")
                 genai.configure(api_key=gemini_key)
                 model = genai.GenerativeModel(
-                    "gemini-1.5-flash-latest",
+                    "gemini-1.5-flash",
                     system_instruction="You are a master vaporwave copywriter. Only output valid JSON.",
                     generation_config=genai.types.GenerationConfig(response_mime_type="application/json")
                 )
@@ -637,8 +644,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
             except Exception as promo_err:
-                logging.error(f"Promo generation failed: {promo_err}")
-                await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> Could not generate the broadcast at this time.")
+                import traceback
+                error_trace = traceback.format_exc()[:2000]
+                logging.error(f"Promo generation failed:\\n{error_trace}")
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=f"❌ <b>Promo Error:</b> {str(promo_err)[:500]}\\n\\n<pre>{html.escape(error_trace)}</pre>", parse_mode="HTML")
+                except:
+                    pass
             return
 
         # In-Progress Ticketing
