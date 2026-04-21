@@ -19,3 +19,8 @@
 **Vulnerability:** Raw exception details and unvalidated user input lengths were exposed in Telegram responses and processed without timeouts.
 **Learning:** Exposing raw exceptions (`str(e)`) in bot responses can leak internal state, file paths, or API structures. Lack of timeouts on `httpx`/`requests` calls allows third-party latency to hang the bot process.
 **Prevention:** Always use generic error messages for end-users while logging the actual exception internally. Implement strict timeouts (e.g., 10s) for all external network requests and enforce length limits on user-provided text to prevent resource exhaustion.
+
+## 2025-06-12 - User-Facing Tracebacks & Weak Bypass Auth
+**Vulnerability:** User-facing error messages included full stack traces via `traceback.format_exc()`, and the 'antigravity' bypass used a hardcoded, case-insensitive substring match for a password.
+**Learning:** Providing stack traces to end-users facilitates reconnaissance by exposing internal file structures and logic flows. Using `in` for password comparisons allows for significant entropy reduction and accidental bypasses.
+**Prevention:** Strictly separate internal logging from user-facing responses. Use `logging.error(..., exc_info=True)` for developers and generic "Internal error" messages for users. Use exact string equality (`==`) and environment-managed secrets for all authentication bypasses.

@@ -35,6 +35,7 @@ ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
+ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
 
 SYSTEM_PROMPT = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'! 
 This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle. 
@@ -645,10 +646,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
             except Exception as promo_err:
                 import traceback
-                error_trace = traceback.format_exc()[:2000]
+                error_trace = traceback.format_exc()
                 logging.error(f"Promo generation failed:\\n{error_trace}")
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=f"❌ <b>Promo Error:</b> {str(promo_err)[:500]}\\n\\n<pre>{html.escape(error_trace)}</pre>", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> An internal error occurred during generation.", parse_mode="HTML")
                 except:
                     pass
             return
@@ -666,7 +667,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if "ghost" in text_lower:
+                if text == ANTIGRAVITY_BYPASS_PASSWORD:
                     antigravity_chats.add(chat_id)
                     if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
                     del ticket_states[user_id]
@@ -873,11 +874,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await push_processed_response(context, chat_id, chat_id, reply_text, user_name, update.message.message_id)
 
         except Exception as e:
-            error_msg = f"❌ <b>AI Engine Fault:</b> <code>{e}</code>"
+            logging.error(f"AI Engine Fault: {e}", exc_info=True)
+            error_msg = "❌ <b>AI Engine Fault:</b> The AI model encountered an error."
             try:
                 await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode="HTML")
             except: pass
-            logging.info(f"❌ ERROR: I tried to respond but Telegram stopped me: {e}")
         return
 
     # 4. ADMIN RULE REMINDER
