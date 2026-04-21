@@ -23,3 +23,7 @@
 ## 2026-05-10 - [Non-Destructive Navigation]
 **Learning:** In multi-step interactive flows (like bug reporting or feedback), "Cancel" buttons are necessary but can be frustrating if the user only wants to correct a minor mistake.
 **Action:** Implement "⬅️ Back" buttons in nested sub-menus to allow users to return to the previous state without destroying their session progress.
+
+## 2026-05-15 - [Ephemeral UI & Input Guardrails]
+**Learning:** Telegram chats can quickly become cluttered with static menus and error messages. Providing a "🗑️ Close" button allows users to clean up their chat history manually. Additionally, explicit character limits in prompts reduce "Message too long" errors and manage user expectations during multi-step input flows.
+**Action:** Centralize a `CLOSE_BUTTON` pattern for all non-interactive system messages and add character limit hints (e.g., `(max N chars)`) to text-heavy input prompts.

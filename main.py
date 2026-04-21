@@ -127,6 +127,9 @@ ticket_data = dict(db.get_val("ticket_data", {}))
 invitations = dict(db.get_val("invitations", {}))
 relay_drafts = {}
 
+CLOSE_BUTTON = InlineKeyboardButton("🗑️ Close", callback_data="close_message")
+CLOSE_KEYBOARD = InlineKeyboardMarkup([[CLOSE_BUTTON]])
+
 def save_state():
     db.set_val("jules_chats", list(jules_chats))
     db.set_val("antigravity_chats", list(antigravity_chats))
@@ -374,10 +377,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     active_menu = ANTIGRAVITY_MENU_TEXT
                 elif chat_id in alchemy_chats:
                     active_menu = ALCHEMY_MENU_TEXT
-                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Could not render the menu. Please try again later.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Could not render the menu. Please try again later.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         # Command to add debuggers
@@ -733,6 +736,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = {"title": f"[{project}] Ticket from @{username}", "body": f"**Project Scope:** {project}\n**Reporter:** @{username}\n\n**Issue Details:**\n{desc}", "labels": ["bug", "pupbot-routed"]}
                     try:
                         import httpx
+                        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                         async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e: 
@@ -904,7 +908,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
 
-    
+    if query.data == "close_message":
+        await query.answer()
+        await query.delete_message()
+        return
+
     if query.data.startswith("relay_"):
         await query.answer()
         action, draft_id = query.data.split(":")
@@ -971,7 +979,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             active_menu = ANTIGRAVITY_MENU_TEXT
         elif chat_id in alchemy_chats:
             active_menu = ALCHEMY_MENU_TEXT
-        await query.edit_message_text(active_menu, parse_mode="HTML")
+        await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
         return
 
     if query.data == "ping_back":
@@ -1015,7 +1023,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 <b>Logic Feedback:</b>\nPlease type your comment about the logic. It will be logged to GitHub.",
+            "👔 <b>Logic Feedback:</b>\nPlease type your comment about the logic (max 500 chars). It will be logged to GitHub.",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
@@ -1036,7 +1044,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Github push error: {e}")
             
         await query.answer()
-        await query.edit_message_text("🚨 <b>EMERGENCY FLARE FIRED!</b>\nAntigravity is aware. GitHub CI/CD has been alerted that Clipsflow is unresponsive.", parse_mode="HTML")
+        await query.edit_message_text("🚨 <b>EMERGENCY FLARE FIRED!</b>\nAntigravity is aware. GitHub CI/CD has been alerted that Clipsflow is unresponsive.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
         return
 
     if query.data == "ping_help":
@@ -1061,7 +1069,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_data.pop(user_id, None)
         save_state()
         await query.answer()
-        await query.edit_message_text("🛑 Ticketing flow cancelled.")
+        await query.edit_message_text("🛑 Ticketing flow cancelled.", reply_markup=CLOSE_KEYBOARD)
         return
 
     if not query.data.startswith("ticket_proj:"):
@@ -1102,7 +1110,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_repo = html.escape(repo_name)
     await query.edit_message_text(
         f"👔 Project locked to <code>{safe_repo}</code> repository.\n\n"
-        "Now, please provide a detailed description of the bug.",
+        "Now, please provide a detailed description of the bug (max 2000 chars).",
         parse_mode="HTML",
         reply_markup=reply_markup
     )
