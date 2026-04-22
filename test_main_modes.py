@@ -86,10 +86,13 @@ class TestMainModes(unittest.TestCase):
         member_context = main.build_identity_context("Pup", "2", False)
         self.assertIn("Lounge member", member_context)
 
-    def test_get_effective_mode_uses_admin_assistant_for_admin_lounge(self):
+    def test_get_effective_mode_respects_admin_assistant_toggle_in_admin_lounge(self):
         main.ADMIN_LOUNGE_ID = "-123"
+        main.admin_assistant_chats.discard("-123")
+        self.assertEqual(main.get_effective_mode("-123"), "puppy")
+
+        main.admin_assistant_chats.add("-123")
         self.assertEqual(main.get_effective_mode("-123"), "admin_assistant")
-        self.assertEqual(main.get_effective_mode("-999"), "puppy")
 
     def test_validate_link_target_chat(self):
         main.MAIN_GROUP_ID = "-200"

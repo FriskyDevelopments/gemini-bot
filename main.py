@@ -267,8 +267,6 @@ def get_effective_mode(chat_id):
     mode_name = get_mode(chat_id)
     if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
         return mode_name
-    if _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID):
-        return "admin_assistant"
     return "puppy"
 
 
