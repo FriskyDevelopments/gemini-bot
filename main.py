@@ -966,7 +966,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     save_state()
                     try:
                         await context.bot.send_message(chat_id=target_chat_id, text="⚡ <b>BYPASS ACCEPTED: Antigravity Core ONLINE.</b>\n\nI am now monitoring this communal chat as your AI Developer. Let's start planning.", parse_mode="HTML")
-                        await context.bot.send_message(chat_id=chat_id, text="✅ <b>Bypass Successful.</b> Antigravity has been summoned to the target group.")
+                        await context.bot.send_message(chat_id=chat_id, text="✅ <b>Bypass Successful.</b> Antigravity has been summoned to the target group.", parse_mode="HTML")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 else:
                     del ticket_states[user_id]
