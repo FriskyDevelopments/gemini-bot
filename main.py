@@ -951,9 +951,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if update.message.chat.type != "private":
-                    return
-
                 target_chat_info = ticket_data.get(user_id, {})
                 target_chat_id = target_chat_info.get("target_chat")
 
