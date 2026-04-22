@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 import os
 
 # Mock dependencies before importing
-# Capture originals for cleanup
 _orig_requests = sys.modules.get('requests')
 _orig_github = sys.modules.get('github')
 sys.modules['requests'] = MagicMock()
@@ -18,17 +17,15 @@ from scripts.pr_reviewer import (
     MAX_DIFF_CHARS
 )
 
-def tearDownModule():
-    """Restore sys.modules to prevent test pollution."""
-    if _orig_requests is None:
-        sys.modules.pop('requests', None)
-    else:
-        sys.modules['requests'] = _orig_requests
+if _orig_requests is not None:
+    sys.modules['requests'] = _orig_requests
+else:
+    sys.modules.pop('requests', None)
 
-    if _orig_github is None:
-        sys.modules.pop('github', None)
-    else:
-        sys.modules['github'] = _orig_github
+if _orig_github is not None:
+    sys.modules['github'] = _orig_github
+else:
+    sys.modules.pop('github', None)
 
 class TestPRReviewer(unittest.TestCase):
 
