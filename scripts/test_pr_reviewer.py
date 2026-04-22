@@ -154,7 +154,7 @@ class TestPRReviewer(unittest.TestCase):
 
         mock_groq_review.assert_called_once()
         called_diff = mock_groq_review.call_args[0][0]
-        self.assertLess(len(called_diff), len(long_diff) + 100) # Should be truncated
+        self.assertLess(len(called_diff), len(long_diff)) # Should be truncated
         self.assertIn("Diff truncated for review", called_diff)
 
         mock_pr.create_issue_comment.assert_called_once()
