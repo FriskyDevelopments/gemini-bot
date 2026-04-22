@@ -332,7 +332,7 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
     if not ADMIN_LOUNGE_ID:
         return
     now = time.time()
-    if (now - admin_owner_last_refresh) < ADMIN_OWNER_REFRESH_SECONDS:
+    if (now - admin_owner_last_refresh) < ADMIN_OWNER_REFRESH_SECONDS and dynamic_alpha_ids:
         return
     admin_owner_last_refresh = now
     try:
@@ -350,9 +350,6 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
             dynamic_alpha_ids.clear()
             dynamic_alpha_ids.update(refreshed_ids)
             save_state()
-
-        # Ensure a successful fetch persists even when unchanged.
-        if changed:
             logging.info(f"Refreshed dynamic alpha roster: {len(dynamic_alpha_ids)} admins discovered.")
     except Exception as e:
         logging.debug(f"Could not refresh admin owner ids: {e}")
