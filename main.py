@@ -15,6 +15,7 @@ import urllib.request
 import urllib.parse
 import io
 import html
+from difflib import SequenceMatcher
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CallbackQueryHandler, filters
@@ -262,13 +263,60 @@ def get_mode(chat_id):
     return "puppy"
 
 
+def get_effective_mode(chat_id):
+    mode_name = get_mode(chat_id)
+    if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
+        return mode_name
+    if _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID):
+        return "admin_assistant"
+    return "puppy"
+
+
+def is_admin_lounge_chat(chat_id):
+    return _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID)
+
+
+def validate_link_target_chat(target_chat_id, admin_chat_id):
+    target_chat_id = _safe_chat_id(target_chat_id)
+    admin_chat_id = _safe_chat_id(admin_chat_id)
+    if target_chat_id == admin_chat_id:
+        return False, "⚠️ Send the code in the target group, not Admin Lounge."
+
+    configured_main_group = _safe_chat_id(os.getenv("MAIN_GROUP_ID") or MAIN_GROUP_ID)
+    if configured_main_group and target_chat_id != configured_main_group:
+        return (
+            False,
+            "⛔ This handshake can only be completed in the configured Main Group.\n"
+            f"Expected: <code>{configured_main_group}</code>",
+        )
+
+    return True, ""
+
+
+def is_admin_status(status):
+    return (status or "").lower() in {"creator", "administrator"}
+
+
+async def is_user_chat_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: str, user_id: str):
+    try:
+        member = await context.bot.get_chat_member(chat_id=chat_id, user_id=int(user_id))
+        return is_admin_status(getattr(member, "status", ""))
+    except Exception:
+        return False
+
+
 def prevent_echo_reply(mode_name, user_text, reply_text):
     def normalize_text(value):
         return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
 
     user_norm = normalize_text(user_text)
     reply_norm = normalize_text(reply_text)
-    too_similar = bool(user_norm) and (user_norm == reply_norm or (reply_norm.startswith(user_norm) and len(reply_norm) <= len(user_norm) + 20))
+    similarity = SequenceMatcher(None, user_norm, reply_norm).ratio() if user_norm and reply_norm else 0.0
+    too_similar = bool(user_norm) and (
+        user_norm == reply_norm
+        or (reply_norm.startswith(user_norm) and len(reply_norm) <= len(user_norm) + 20)
+        or similarity >= 0.92
+    )
 
     if mode_name == "antigravity" and too_similar:
         return "Antigravity online. I can help immediately—share the target outcome, technical stack, constraints, and deadline."
@@ -286,18 +334,26 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     if (now - admin_owner_last_refresh) < ADMIN_OWNER_REFRESH_SECONDS and dynamic_alpha_ids:
         return
-    admin_owner_last_refresh = now
     try:
         admins = await context.bot.get_chat_administrators(chat_id=ADMIN_LOUNGE_ID)
-        changed = False
+        refreshed_ids = set()
         for admin in admins:
-            if getattr(admin, "status", "") == "creator":
+            status = getattr(admin, "status", "")
+            if is_admin_status(status):
                 uid = _safe_chat_id(admin.user.id)
-                if uid not in dynamic_alpha_ids:
-                    dynamic_alpha_ids.add(uid)
-                    changed = True
+                if uid:
+                    refreshed_ids.add(uid)
+
+        changed = refreshed_ids != dynamic_alpha_ids
         if changed:
+            dynamic_alpha_ids.clear()
+            dynamic_alpha_ids.update(refreshed_ids)
             save_state()
+        admin_owner_last_refresh = now
+
+        # Ensure a successful fetch persists even when unchanged.
+        if changed:
+            logging.info(f"Refreshed dynamic alpha roster: {len(dynamic_alpha_ids)} admins discovered.")
     except Exception as e:
         logging.debug(f"Could not refresh admin owner ids: {e}")
 
@@ -311,7 +367,7 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 
 
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
-    role = "Owner/Alpha" if is_alpha else "Lounge member"
+    role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
     return f"{user_name} ({user_id}) - {role}"
 
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN") or os.getenv("GITHUB_TOKEN")
@@ -549,10 +605,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
             try:
                 active_menu = MENU_TEXT
-                if chat_id in antigravity_chats:
+                effective_mode = get_effective_mode(chat_id)
+                if effective_mode == "antigravity":
                     active_menu = ANTIGRAVITY_MENU_TEXT
-                elif chat_id in alchemy_chats:
+                elif effective_mode == "alchemy":
                     active_menu = ALCHEMY_MENU_TEXT
+                elif effective_mode == "admin_assistant":
+                    active_menu = ADMIN_ASSISTANT_MENU_TEXT
                 await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
@@ -607,14 +666,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if text_lower.startswith("/link_group"):
-            if not is_alpha:
-                return
             parts = text.split(maxsplit=1)
             if len(parts) == 1:
-                if _safe_chat_id(chat_id) != _safe_chat_id(ADMIN_LOUNGE_ID):
+                if not is_admin_lounge_chat(chat_id):
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text="⛔ Run <code>/link_group</code> in the Admin Lounge first to create a handshake code.",
+                        parse_mode="HTML",
+                    )
+                    return
+                is_admin_lounge_member = await is_user_chat_admin(context, chat_id, user_id)
+                if not (is_alpha or is_admin_lounge_member):
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="⛔ Only admins of this lounge can generate link codes.",
                         parse_mode="HTML",
                     )
                     return
@@ -627,9 +692,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=(
                         "🔐 <b>Link code created.</b>\n"
                         f"Code: <code>{code}</code>\n"
-                        "Now go to the target group and send:\n"
+                        "Now go to the Main Group and send:\n"
                         f"<code>/link_group {code}</code>\n"
-                        f"This code expires in {LINK_CODE_TTL_SECONDS // 60} minutes."
+                        f"This code expires in {LINK_CODE_TTL_SECONDS // 60} minutes.\n"
+                        "The bot only accepts this handshake in the configured Main Group."
                     ),
                     parse_mode="HTML",
                 )
@@ -646,13 +712,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text="❌ Link code expired. Generate a new one in Admin Lounge.")
                 return
             admin_chat_id = _safe_chat_id(link_payload.get("admin_chat_id"))
-            issuer_user_id = _safe_chat_id(link_payload.get("issuer_user_id"))
-            if _safe_chat_id(user_id) != issuer_user_id and not is_alpha:
-                await context.bot.send_message(chat_id=chat_id, text="⛔ Only the code issuer or an alpha can complete this link.")
-                return
             target_chat_id = _safe_chat_id(chat_id)
-            if target_chat_id == admin_chat_id:
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ Send the code in the target group, not Admin Lounge.")
+
+            is_valid_target, target_error = validate_link_target_chat(target_chat_id, admin_chat_id)
+            if not is_valid_target:
+                await context.bot.send_message(chat_id=chat_id, text=target_error, parse_mode="HTML")
+                return
+
+            is_target_admin = await is_user_chat_admin(context, target_chat_id, user_id)
+            if not (is_target_admin or is_alpha):
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⛔ Only an admin of this group (or alpha) can complete the link handshake.",
+                    parse_mode="HTML",
+                )
                 return
 
             linked_groups.add(target_chat_id)
@@ -1067,7 +1140,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
         
         try:
-            mode_name = get_mode(chat_id)
+            mode_name = get_effective_mode(chat_id)
             effective_mode = mode_name
             active_system_prompt = SYSTEM_PROMPT
 
@@ -1095,9 +1168,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Do not mirror user text. Transform it into polished creative output.\n"
                     f"Message: {user_text}"
                 )
-            elif str(chat_id) == str(ADMIN_LOUNGE_ID):
-                effective_mode = "admin_assistant"
-                if chat_id in relay_chats:
+            elif mode_name == "admin_assistant":
+                if chat_id in relay_chats and is_admin_lounge_chat(chat_id):
                     active_system_prompt = SYSTEM_PROMPT
                     prompt = (
                         f"{SYSTEM_PROMPT}\n"
@@ -1105,20 +1177,18 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "Address the main lounge directly, not the admin operator.]\n"
                         f"Message: {user_text}"
                     )
-                elif mode_name == "admin_assistant":
-                    active_system_prompt = ADMIN_ASSISTANT_PROMPT
-                    prompt = (
-                        f"{ADMIN_ASSISTANT_PROMPT}\n"
-                        f"[IDENTITY: {identity_context}]\n"
-                        "You are in admin operations mode. Prioritize execution-ready output.\n"
-                        f"Message: {user_text}"
-                    )
                 else:
                     active_system_prompt = ADMIN_ASSISTANT_PROMPT
+                    alpha_notice = (
+                        "This speaker is the owner/alpha. Their request takes highest priority."
+                        if is_alpha
+                        else "This speaker is an admin-group participant."
+                    )
                     prompt = (
                         f"{ADMIN_ASSISTANT_PROMPT}\n"
-                        f"[SYSTEM NOTICE: You are speaking privately to admins in the backstage lounge.]\n"
                         f"[IDENTITY: {identity_context}]\n"
+                        f"[SYSTEM NOTICE: {alpha_notice}]\n"
+                        "You are in admin operations mode. Prioritize execution-ready output and concrete next actions.\n"
                         f"Message: {user_text}"
                     )
             else:
@@ -1283,10 +1353,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "show_menu":
         await query.answer()
         active_menu = MENU_TEXT
-        if chat_id in antigravity_chats:
+        effective_mode = get_effective_mode(chat_id)
+        if effective_mode == "antigravity":
             active_menu = ANTIGRAVITY_MENU_TEXT
-        elif chat_id in alchemy_chats:
+        elif effective_mode == "alchemy":
             active_menu = ALCHEMY_MENU_TEXT
+        elif effective_mode == "admin_assistant":
+            active_menu = ADMIN_ASSISTANT_MENU_TEXT
         await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
         return
 
