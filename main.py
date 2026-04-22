@@ -957,7 +957,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_chat_info = ticket_data.get(user_id, {})
                 target_chat_id = target_chat_info.get("target_chat")
 
-                if target_chat_id and secrets.compare_digest(text, ANTIGRAVITY_BYPASS_PASSWORD):
+                if target_chat_id and secrets.compare_digest(
+                    text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")
+                ):
                     antigravity_chats.add(target_chat_id)
                     alchemy_chats.discard(target_chat_id)
                     admin_assistant_chats.discard(target_chat_id)
