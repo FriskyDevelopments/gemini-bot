@@ -332,8 +332,9 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
     if not ADMIN_LOUNGE_ID:
         return
     now = time.time()
-    if (now - admin_owner_last_refresh) < ADMIN_OWNER_REFRESH_SECONDS and dynamic_alpha_ids:
+    if (now - admin_owner_last_refresh) < ADMIN_OWNER_REFRESH_SECONDS:
         return
+    admin_owner_last_refresh = now
     try:
         admins = await context.bot.get_chat_administrators(chat_id=ADMIN_LOUNGE_ID)
         refreshed_ids = set()
@@ -349,7 +350,6 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
             dynamic_alpha_ids.clear()
             dynamic_alpha_ids.update(refreshed_ids)
             save_state()
-        admin_owner_last_refresh = now
 
         # Ensure a successful fetch persists even when unchanged.
         if changed:
@@ -1141,7 +1141,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             mode_name = get_effective_mode(chat_id)
-            effective_mode = mode_name
             active_system_prompt = SYSTEM_PROMPT
 
             if mode_name == "antigravity":
@@ -1216,7 +1215,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Catch safety blocking
             try:
                 reply_text = response.text.replace("[DELETE]", "").strip()
-                reply_text = prevent_echo_reply(effective_mode, user_text, reply_text)
+                reply_text = prevent_echo_reply(mode_name, user_text, reply_text)
             except ValueError as ve:
                 reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
 
