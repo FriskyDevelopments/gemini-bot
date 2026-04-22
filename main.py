@@ -115,20 +115,26 @@ Available commands for developers:
 • /ticket - Report structured bugs to GitHub
 • /ping - Send logic feedback
 
-<i>Awaiting commands.</i>"""
+<i>Awaiting commands.</i>
+
+<i>Type /antigravity to toggle off.</i>"""
 
 ALCHEMY_MENU_TEXT = """🔮 <b>STIX MΛGIC ALCHEMY</b>
 
 Welcome to the lab!
 • Send me viral ideas or URLs
-• Draw assets or concept art!"""
+• Draw assets or concept art!
+
+<i>Type /alchemy to toggle off.</i>"""
 
 ADMIN_ASSISTANT_MENU_TEXT = """🛠️ <b>ADMIN ASSISTANT ONLINE</b>
 
 Operational tools for Alphas:
 • Draft promos and announcements
 • Build moderation plans and workflows
-• Create step-by-step execution checklists"""
+• Create step-by-step execution checklists
+
+<i>Type /admin_assistant to toggle off.</i>"""
 
 import db
 
@@ -553,6 +559,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     active_menu = ANTIGRAVITY_MENU_TEXT
                 elif chat_id in alchemy_chats:
                     active_menu = ALCHEMY_MENU_TEXT
+                elif chat_id in admin_assistant_chats:
+                    active_menu = ADMIN_ASSISTANT_MENU_TEXT
                 await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
@@ -851,7 +859,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard = [
                     [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
                     [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-                    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+                    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+                    [CLOSE_BUTTON]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 try:
@@ -1141,6 +1150,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 img_bytes = await photo_file.download_as_bytearray()
                 prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
                 
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             response = await model.generate_content_async(prompt_list)
             
             # Catch safety blocking
@@ -1287,6 +1297,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             active_menu = ANTIGRAVITY_MENU_TEXT
         elif chat_id in alchemy_chats:
             active_menu = ALCHEMY_MENU_TEXT
+        elif chat_id in admin_assistant_chats:
+            active_menu = ADMIN_ASSISTANT_MENU_TEXT
         await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
         return
 
