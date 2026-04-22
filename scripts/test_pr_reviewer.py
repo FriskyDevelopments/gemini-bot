@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import os
 
 # Mock dependencies before importing
-# Capture originals for cleanup
+# Capture originals for cleanup in tearDownModule
 _orig_requests = sys.modules.get('requests')
 _orig_github = sys.modules.get('github')
 sys.modules['requests'] = MagicMock()
@@ -19,7 +19,7 @@ from scripts.pr_reviewer import (
 )
 
 def tearDownModule():
-    """Restore sys.modules to prevent test pollution."""
+    """Restore sys.modules to prevent mock leakage to other tests."""
     if _orig_requests is None:
         sys.modules.pop('requests', None)
     else:
@@ -169,7 +169,7 @@ class TestPRReviewer(unittest.TestCase):
 
         mock_groq_review.assert_called_once()
         called_diff = mock_groq_review.call_args[0][0]
-        # Exact truncation check
+        # Verify exact truncation behavior
         expected_truncated = long_diff[:MAX_DIFF_CHARS]
         self.assertTrue(called_diff.startswith(expected_truncated))
         self.assertIn("Diff truncated for review", called_diff)
