@@ -24,3 +24,8 @@
 **Vulnerability:** User-facing error messages included full stack traces via `traceback.format_exc()`, and the 'antigravity' bypass used a hardcoded, case-insensitive substring match for a password.
 **Learning:** Providing stack traces to end-users facilitates reconnaissance by exposing internal file structures and logic flows. Using `in` for password comparisons allows for significant entropy reduction and accidental bypasses.
 **Prevention:** Strictly separate internal logging from user-facing responses. Use `logging.error(..., exc_info=True)` for developers and generic "Internal error" messages for users. Use exact string equality (`==`) and environment-managed secrets for all authentication bypasses.
+
+## 2026-04-22 - Secure Multi-Step Authentication & Timing Attack Prevention
+**Vulnerability:** The bot allowed sensitive bypass password entry in communal group chats, exposing secrets to all members. Additionally, string comparisons for authentication were vulnerable to timing-based side-channel attacks.
+**Learning:** Authentication flows initiated in public contexts must transition to private channels (DMs) for secret entry. Using standard equality for secret comparison can leak information about the secret's value through execution time differences.
+**Prevention:** Always transition to Private DMs for password/token collection. Use `secrets.compare_digest` for all sensitive string comparisons to ensure constant-time execution. Use session-state tracking (e.g., `ticket_data`) to maintain context across different chat environments.

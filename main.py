@@ -172,7 +172,10 @@ def save_state():
 
 
 def _safe_chat_id(value):
-    return str(value) if value is not None else ""
+    s = str(value) if value is not None else ""
+    if re.match(r'^-?\d+$', s):
+        return s
+    return ""
 
 
 def _read_authorized_groups():
@@ -722,13 +725,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             if update.message.chat.type != "private":
                 ticket_states[user_id] = "antigravity_bypass"
+                ticket_data[user_id] = {"target_chat": chat_id}
                 save_state()
                 try:
                     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter bypass password to summon Antigravity into this communal chat:</i>",
+                        text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>To summon Antigravity into this communal chat, please send the bypass password to me in a <b>Private DM</b>.</i>",
                         parse_mode="HTML",
                         reply_markup=reply_markup
                     )
@@ -795,7 +799,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 invite = await context.bot.create_chat_invite_link(chat_id=MAIN_GROUP_ID, member_limit=1)
                 await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
             except Exception as e:
-                try: await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to generate link. Make sure I am an admin in the main lounge!\nError: {e}")
+                logging.error(f"Invite link generation failed: {e}", exc_info=True)
+                try: await context.bot.send_message(chat_id=chat_id, text="❌ Failed to generate link. Please check bot permissions and try again.")
                 except: pass
             return
 
@@ -946,19 +951,28 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if text == ANTIGRAVITY_BYPASS_PASSWORD:
-                    antigravity_chats.add(chat_id)
-                    if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
+                target_chat_info = ticket_data.get(user_id, {})
+                target_chat_id = target_chat_info.get("target_chat")
+
+                if target_chat_id and secrets.compare_digest(
+                    text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")
+                ):
+                    antigravity_chats.add(target_chat_id)
+                    alchemy_chats.discard(target_chat_id)
+                    admin_assistant_chats.discard(target_chat_id)
                     del ticket_states[user_id]
+                    ticket_data.pop(user_id, None)
                     save_state()
                     try:
-                        await context.bot.send_message(chat_id=chat_id, text="⚡ <b>BYPASS ACCEPTED: Antigravity Core ONLINE.</b>\n\nI am now monitoring this communal chat as your AI Developer. Let's start planning.", parse_mode="HTML")
+                        await context.bot.send_message(chat_id=target_chat_id, text="⚡ <b>BYPASS ACCEPTED: Antigravity Core ONLINE.</b>\n\nI am now monitoring this communal chat as your AI Developer. Let's start planning.", parse_mode="HTML")
+                        await context.bot.send_message(chat_id=chat_id, text="✅ <b>Bypass Successful.</b> Antigravity has been summoned to the target group.", parse_mode="HTML")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 else:
                     del ticket_states[user_id]
+                    ticket_data.pop(user_id, None)
                     save_state()
                     try:
-                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML")
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password or session expired. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "ping_comment_entry":
