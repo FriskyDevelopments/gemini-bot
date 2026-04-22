@@ -1309,7 +1309,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
             [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+            [CLOSE_BUTTON]
         ]
         await query.edit_message_text("✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
         return
