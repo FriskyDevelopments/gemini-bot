@@ -27,3 +27,7 @@
 ## 2026-05-15 - [Ephemeral UI & Input Guardrails]
 **Learning:** Telegram chats can quickly become cluttered with static menus and error messages. Providing a "🗑️ Close" button allows users to clean up their chat history manually. Additionally, explicit character limits in prompts reduce "Message too long" errors and manage user expectations during multi-step input flows.
 **Action:** Centralize a `CLOSE_BUTTON` pattern for all non-interactive system messages and add character limit hints (e.g., `(max N chars)`) to text-heavy input prompts.
+
+## 2026-04-23 - [Mode Exit Discoverability]
+**Learning:** In persona-driven interfaces, users may forget how to return to the default state. Explicit "Type /command to toggle off" hints in the persona-specific menus significantly reduce friction and improve user autonomy.
+**Action:** Always include exit/toggle-off instructions within the header or footer of mode-specific menus.
