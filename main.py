@@ -270,13 +270,6 @@ def get_mode(chat_id):
     return "puppy"
 
 
-def get_effective_mode(chat_id):
-    mode_name = get_mode(chat_id)
-    if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
-        return mode_name
-    return "puppy"
-
-
 def is_admin_lounge_chat(chat_id):
     return _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID)
 
@@ -607,7 +600,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
             try:
                 active_menu = MENU_TEXT
-                effective_mode = get_effective_mode(chat_id)
+                effective_mode = get_mode(chat_id)
                 if effective_mode == "antigravity":
                     active_menu = ANTIGRAVITY_MENU_TEXT
                 elif effective_mode == "alchemy":
@@ -1142,7 +1135,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
         
         try:
-            mode_name = get_effective_mode(chat_id)
+            mode_name = get_mode(chat_id)
             active_system_prompt = SYSTEM_PROMPT
 
             if mode_name == "antigravity":
@@ -1169,29 +1162,28 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Do not mirror user text. Transform it into polished creative output.\n"
                     f"Message: {user_text}"
                 )
+            elif chat_id in relay_chats and is_admin_lounge_chat(chat_id):
+                active_system_prompt = SYSTEM_PROMPT
+                prompt = (
+                    f"{SYSTEM_PROMPT}\n"
+                    f"[SYSTEM NOTICE: Triggered by admin ({identity_context}) and broadcasted to Main Lounge. "
+                    "Address the main lounge directly, not the admin operator.]\n"
+                    f"Message: {user_text}"
+                )
             elif mode_name == "admin_assistant":
-                if chat_id in relay_chats and is_admin_lounge_chat(chat_id):
-                    active_system_prompt = SYSTEM_PROMPT
-                    prompt = (
-                        f"{SYSTEM_PROMPT}\n"
-                        f"[SYSTEM NOTICE: Triggered by admin ({identity_context}) and broadcasted to Main Lounge. "
-                        "Address the main lounge directly, not the admin operator.]\n"
-                        f"Message: {user_text}"
-                    )
-                else:
-                    active_system_prompt = ADMIN_ASSISTANT_PROMPT
-                    alpha_notice = (
-                        "This speaker is the owner/alpha. Their request takes highest priority."
-                        if is_alpha
-                        else "This speaker is an admin-group participant."
-                    )
-                    prompt = (
-                        f"{ADMIN_ASSISTANT_PROMPT}\n"
-                        f"[IDENTITY: {identity_context}]\n"
-                        f"[SYSTEM NOTICE: {alpha_notice}]\n"
-                        "You are in admin operations mode. Prioritize execution-ready output and concrete next actions.\n"
-                        f"Message: {user_text}"
-                    )
+                active_system_prompt = ADMIN_ASSISTANT_PROMPT
+                alpha_notice = (
+                    "This speaker is the owner/alpha. Their request takes highest priority."
+                    if is_alpha
+                    else "This speaker is an admin-group participant."
+                )
+                prompt = (
+                    f"{ADMIN_ASSISTANT_PROMPT}\n"
+                    f"[IDENTITY: {identity_context}]\n"
+                    f"[SYSTEM NOTICE: {alpha_notice}]\n"
+                    "You are in admin operations mode. Prioritize execution-ready output and concrete next actions.\n"
+                    f"Message: {user_text}"
+                )
             else:
                 relationship = "Your ALPHA (Owner)" if is_alpha else "A lounge member"
                 prompt = (
@@ -1354,7 +1346,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "show_menu":
         await query.answer()
         active_menu = MENU_TEXT
-        effective_mode = get_effective_mode(chat_id)
+        effective_mode = get_mode(chat_id)
         if effective_mode == "antigravity":
             active_menu = ANTIGRAVITY_MENU_TEXT
         elif effective_mode == "alchemy":
