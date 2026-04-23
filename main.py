@@ -116,20 +116,24 @@ Available commands for developers:
 • /ticket - Report structured bugs to GitHub
 • /ping - Send logic feedback
 
-<i>Awaiting commands.</i>"""
+<i>Awaiting commands. Type /antigravity to toggle off.</i>"""
 
 ALCHEMY_MENU_TEXT = """🔮 <b>STIX MΛGIC ALCHEMY</b>
 
 Welcome to the lab!
 • Send me viral ideas or URLs
-• Draw assets or concept art!"""
+• Draw assets or concept art!
+
+<i>Type /alchemy to toggle off.</i>"""
 
 ADMIN_ASSISTANT_MENU_TEXT = """🛠️ <b>ADMIN ASSISTANT ONLINE</b>
 
 Operational tools for Alphas:
 • Draft promos and announcements
 • Build moderation plans and workflows
-• Create step-by-step execution checklists"""
+• Create step-by-step execution checklists
+
+<i>Type /admin_assistant to toggle off.</i>"""
 
 import db
 
@@ -1522,4 +1526,3 @@ if __name__ == '__main__':
             time.sleep(3600)
     except Exception as e:
         logging.error(f"Unexpected error in bot loop: {e}")
-
