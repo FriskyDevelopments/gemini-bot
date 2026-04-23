@@ -22,7 +22,7 @@ class TestMainModes(unittest.TestCase):
         main.link_codes.update(self.orig_link_codes)
 
     def test_get_mode_precedence(self):
-        chat_id = "chat-1"
+        chat_id = "-1001"
         main.antigravity_chats.add(chat_id)
         main.alchemy_chats.add(chat_id)
         main.admin_assistant_chats.add(chat_id)

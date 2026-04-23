@@ -173,7 +173,7 @@ def save_state():
 
 def _safe_chat_id(value):
     s = str(value) if value is not None else ""
-    if re.match(r"^-?\d+$", s):
+    if re.match(r"^-?\d+\Z", s):
         return s
     return ""
 
