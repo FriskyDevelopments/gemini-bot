@@ -172,7 +172,10 @@ def save_state():
 
 
 def _safe_chat_id(value):
-    return str(value) if value is not None else ""
+    s = str(value) if value is not None else ""
+    if re.match(r"^-?\d+$", s):
+        return s
+    return ""
 
 
 def _read_authorized_groups():
@@ -946,7 +949,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if text == ANTIGRAVITY_BYPASS_PASSWORD:
+                if secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     antigravity_chats.add(chat_id)
                     if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
                     del ticket_states[user_id]
