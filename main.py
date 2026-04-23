@@ -268,6 +268,20 @@ def get_mode(chat_id):
     return "puppy"
 
 
+def get_active_menu_text(chat_id):
+    mode = get_mode(chat_id)
+    # Admin Lounge defaults to Admin Assistant when no explicit persona toggle is active.
+    if mode == "puppy" and _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID):
+        mode = "admin_assistant"
+    menu_map = {
+        "puppy": MENU_TEXT,
+        "antigravity": ANTIGRAVITY_MENU_TEXT,
+        "alchemy": ALCHEMY_MENU_TEXT,
+        "admin_assistant": ADMIN_ASSISTANT_MENU_TEXT,
+    }
+    return menu_map.get(mode, MENU_TEXT)
+
+
 def prevent_echo_reply(mode_name, user_text, reply_text):
     def normalize_text(value):
         return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
@@ -554,13 +568,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
             try:
-                active_menu = MENU_TEXT
-                if chat_id in antigravity_chats:
-                    active_menu = ANTIGRAVITY_MENU_TEXT
-                elif chat_id in alchemy_chats:
-                    active_menu = ALCHEMY_MENU_TEXT
-                elif chat_id in admin_assistant_chats:
-                    active_menu = ADMIN_ASSISTANT_MENU_TEXT
+                active_menu = get_active_menu_text(chat_id)
                 await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
@@ -1144,13 +1152,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
             
+            try:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception as chat_action_error:
+                logging.debug(f"Ignored chat action error: {chat_action_error}")
+
             prompt_list = [prompt]
             if getattr(update.message, 'photo', None):
                 photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
                 img_bytes = await photo_file.download_as_bytearray()
                 prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
                 
-            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             response = await model.generate_content_async(prompt_list)
             
             # Catch safety blocking
@@ -1292,13 +1304,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "show_menu":
         await query.answer()
-        active_menu = MENU_TEXT
-        if chat_id in antigravity_chats:
-            active_menu = ANTIGRAVITY_MENU_TEXT
-        elif chat_id in alchemy_chats:
-            active_menu = ALCHEMY_MENU_TEXT
-        elif chat_id in admin_assistant_chats:
-            active_menu = ADMIN_ASSISTANT_MENU_TEXT
+        active_menu = get_active_menu_text(chat_id)
         await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
         return
 
@@ -1379,7 +1385,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
             [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")]
+            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")],
+            [CLOSE_BUTTON]
         ]
         await query.answer()
         await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
