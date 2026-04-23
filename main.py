@@ -173,7 +173,7 @@ def save_state():
 
 def _safe_chat_id(value):
     s = str(value) if value is not None else ""
-    if re.match(r"^-?\d+$", s):
+    if re.fullmatch(r"-?\d+", s):
         return s
     return ""
 
@@ -1455,4 +1455,3 @@ if __name__ == '__main__':
             time.sleep(3600)
     except Exception as e:
         logging.error(f"Unexpected error in bot loop: {e}")
-
