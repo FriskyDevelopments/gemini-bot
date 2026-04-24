@@ -509,7 +509,6 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
             formatted_text = formatted_text.replace(img_match2.group(0), "")
     
     # ── 🔊 TTS Voice Reply (Groq PlayAI) ── #
-    voice_sent = False
     try:
         import httpx, io
         await context.bot.send_chat_action(chat_id=target_chat, action="record_voice")
@@ -524,7 +523,6 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
         audio_buf = io.BytesIO(tts_resp.content)
         audio_buf.name = "pupbot_voice.wav"
         await context.bot.send_voice(chat_id=target_chat, voice=audio_buf, reply_to_message_id=target_reply_id)
-        voice_sent = True
         logging.info(f"✅ AI Voice responded back to {user_name} (Chat {target_chat}) successfully.")
     except Exception as tts_err:
         logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
