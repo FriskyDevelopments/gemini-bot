@@ -1281,7 +1281,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
                 except Exception:
                     logging.error("Failed to send rules to main lounge", exc_info=True)
-                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Please check my permissions and try again.", parse_mode="HTML")
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Please check my permissions and try again.", parse_mode="HTML")
+                    except:
+                        pass
             else:
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
             return
