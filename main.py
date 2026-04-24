@@ -869,9 +869,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 invite = await context.bot.create_chat_invite_link(chat_id=MAIN_GROUP_ID, member_limit=1)
                 await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
-            except Exception as e:
-                try: await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to generate link. Make sure I am an admin in the main lounge!\nError: {e}")
-                except: pass
+            except Exception:
+                logging.error("Invite link generation failed", exc_info=True)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate link.</b> Make sure I am an admin in the main lounge and try again.", parse_mode="HTML")
+                except:
+                    pass
             return
 
         # Start Ticketing
@@ -935,7 +938,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Omni-Channel Promo Logic
-        if "promo" in text_lower and str(chat_id) == str(ADMIN_LOUNGE_ID):
+        if "promo" in text_lower and str(chat_id) == str(ADMIN_LOUNGE_ID) and is_alpha:
             try:
                 await context.bot.send_message(chat_id=chat_id, text="🐾 <i>Wags aggressively</i> Acknowledged, Master! Generating Omni-Channel Promo blast...", parse_mode="HTML")
                 
@@ -1276,8 +1279,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=rules_caption, parse_mode='Markdown')
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
-                except Exception as e:
-                    await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to send rules to main lounge: {e}")
+                except Exception:
+                    logging.error("Failed to send rules to main lounge", exc_info=True)
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Please check my permissions and try again.", parse_mode="HTML")
             else:
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
             return
