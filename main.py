@@ -539,7 +539,7 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
             formatted_text += f"\n\n[Failed to send image: {img_err}]"
 
     # Always send text too (readable on desktop / if voice failed)
-    if not voice_sent and formatted_text.strip():
+    if formatted_text.strip():
         # Smart paragraph chunker to avoid cutting middle of words or HTML tags
         paragraphs = formatted_text.split('\n')
         chunks = []
