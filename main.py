@@ -920,13 +920,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logging.error(f"Github push error: {e}")
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>JULES SYSTEM: ONLINE.</b>\nAntigravity has received your feedback and it is logged to GitHub.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>JULES SYSTEM: ONLINE.</b>\nAntigravity has received your feedback and it is logged to GitHub.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
             else:
                 keyboard = [
                     [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
                     [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-                    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+                    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+                    [CLOSE_BUTTON]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 try:
@@ -1053,7 +1054,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 del ticket_states[user_id]
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>Comment Saved!</b> Antigravity has received your logic feedback.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>Comment Saved!</b> Antigravity has received your logic feedback.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "project_other":
@@ -1068,7 +1069,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_state()
                 try:
                     safe_project = html.escape(project)
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
+                    keyboard = [
+                        [InlineKeyboardButton("⬅️ Back", callback_data="ticket_back"),
+                         InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML", reply_markup=reply_markup)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
@@ -1371,7 +1377,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
             [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")]
+            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+            [CLOSE_BUTTON]
         ]
         await query.edit_message_text("✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
         return
@@ -1440,7 +1447,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
             [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")]
+            [InlineKeyboardButton("⬅️ Back", callback_data="ping_back")],
+            [CLOSE_BUTTON]
         ]
         await query.answer()
         await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
