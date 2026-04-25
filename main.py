@@ -938,7 +938,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Omni-Channel Promo Logic
-        if text_lower.startswith("/promo") and str(chat_id) == str(ADMIN_LOUNGE_ID) and is_alpha:
+        if text_lower == "/promo" and str(chat_id) == str(ADMIN_LOUNGE_ID) and is_alpha:
             try:
                 await context.bot.send_message(chat_id=chat_id, text="🐾 <i>Wags aggressively</i> Acknowledged, Master! Generating Omni-Channel Promo blast...", parse_mode="HTML")
                 
