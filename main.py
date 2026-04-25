@@ -534,9 +534,9 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
         try:
             await context.bot.send_photo(chat_id=target_chat, photo=image_url, reply_to_message_id=target_reply_id)
             logging.info(f"✅ AI Image sent to {user_name} successfully.")
-        except Exception as img_err:
-            logging.error(f"Failed to send pollination image: {img_err}")
-            formatted_text += f"\n\n[Failed to send image: {img_err}]"
+        except Exception:
+            logging.error("Failed to send pollination image", exc_info=True)
+            formatted_text += "\n\n[Failed to send generated image]"
 
     # Always send text too (readable on desktop / if voice failed)
     if not voice_sent and formatted_text.strip():
@@ -869,9 +869,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 invite = await context.bot.create_chat_invite_link(chat_id=MAIN_GROUP_ID, member_limit=1)
                 await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
-            except Exception as e:
-                try: await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to generate link. Make sure I am an admin in the main lounge!\nError: {e}")
-                except: pass
+            except Exception:
+                logging.error("Invite link generation failed", exc_info=True)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate invite link.</b> Please ensure the bot has proper administrative permissions.", parse_mode="HTML")
+                except:
+                    pass
             return
 
         # Start Ticketing
@@ -935,7 +938,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Omni-Channel Promo Logic
-        if "promo" in text_lower and str(chat_id) == str(ADMIN_LOUNGE_ID):
+        if text_lower == "/promo" and str(chat_id) == str(ADMIN_LOUNGE_ID) and is_alpha:
             try:
                 await context.bot.send_message(chat_id=chat_id, text="🐾 <i>Wags aggressively</i> Acknowledged, Master! Generating Omni-Channel Promo blast...", parse_mode="HTML")
                 
@@ -998,10 +1001,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     dm_status = f"⚠️ DM matrix failed: {e}"
 
                 await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
-            except Exception as promo_err:
-                import traceback
-                error_trace = traceback.format_exc()
-                logging.error(f"Promo generation failed:\\n{error_trace}")
+            except Exception:
+                logging.error("Promo generation failed", exc_info=True)
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> An internal error occurred during generation.", parse_mode="HTML")
                 except:
@@ -1276,8 +1277,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=rules_caption, parse_mode='Markdown')
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
-                except Exception as e:
-                    await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to send rules to main lounge: {e}")
+                except Exception:
+                    logging.error("Rule reminder broadcast failed", exc_info=True)
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Internal broadcast error.", parse_mode="HTML")
+                    except: pass
             else:
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
             return
