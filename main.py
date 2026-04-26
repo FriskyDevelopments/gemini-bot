@@ -1135,6 +1135,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.delete()
             except Exception as e:
                 logging.info(f"Could not send log report or delete message: {e}")
+            return
                 
     # 3. CONVERSATIONAL LOGIC
     # Trigger if alpha/authorized, bot mention, direct reply, or occasional ambient reply.
