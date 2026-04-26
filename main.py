@@ -615,7 +615,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Could not render the menu. Please try again later.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Could not render the menu. Please try again later.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                except Exception:
+                    # Final fallback to plain text if HTML also fails
+                    await context.bot.send_message(chat_id=chat_id, text="⚠️ System Error: Could not render the menu. Please try again later.", reply_markup=CLOSE_KEYBOARD)
             return
 
         # Command to add debuggers
@@ -1108,20 +1112,26 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
 
-    # 2. CHECK FOR SPAMMERS
-    if update.message.text:
-        text_lower = update.message.text.lower()
+    # 2. CHECK FOR SPAMMERS (Check text and captions)
+    raw_content = update.message.text or update.message.caption or ""
+    if raw_content:
+        text_lower = raw_content.lower()
         if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
             spammer = update.message.from_user
             spammer_name = spammer.username or spammer.first_name
-            inviter = invitations.get(spammer.id, "Unknown / Join Link")
+            inviter = invitations.get(str(spammer.id), "Unknown / Join Link")
+
+            # Escape user-provided data for HTML safety
+            safe_text = html.escape(raw_content)
+            safe_spammer = html.escape(spammer_name)
+            safe_inviter = html.escape(inviter)
             
-            report = f"🚨 **SPAMMER DETECTED**\nMsg: {update.message.text}\n👤 Spammer: {spammer_name}\n🔑 Admitted by: {inviter}"
+            report = f"🚨 <b>SPAMMER DETECTED</b>\nMsg: {safe_text}\n👤 Spammer: {safe_spammer}\n🔑 Admitted by: {safe_inviter}"
             
-            logging.info(report)
+            logging.info(f"🚨 SPAMMER DETECTED: {spammer_name} (ID: {spammer.id})")
             log_id = ADMIN_LOUNGE_ID if ADMIN_LOUNGE_ID else chat_id
             try:
-                await context.bot.send_message(chat_id=log_id, text=report)
+                await context.bot.send_message(chat_id=log_id, text=report, parse_mode="HTML")
                 await update.message.delete()
             except Exception as e:
                 logging.info(f"Could not send log report or delete message: {e}")
@@ -1135,7 +1145,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_text_or_photo = bool(update.message.text or update.message.photo)
     
     if (is_alpha or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and has_text_or_photo:
-        user_text = update.message.text or update.message.caption or ""
+        user_text = (update.message.text or update.message.caption or "")[:4000]
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
