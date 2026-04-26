@@ -86,6 +86,48 @@ class TestMainModes(unittest.TestCase):
         member_context = main.build_identity_context("Pup", "2", False)
         self.assertIn("Lounge member", member_context)
 
+    def test_get_primary_target_group_prefers_linked(self):
+        original_main_group = main.MAIN_GROUP_ID
+        original_linked = set(main.linked_groups)
+        original_env_main = main.os.environ.get("MAIN_GROUP_ID")
+        try:
+            main.MAIN_GROUP_ID = None
+            main.linked_groups.clear()
+            main.linked_groups.add("-100LINKED")
+            if "MAIN_GROUP_ID" in main.os.environ:
+                del main.os.environ["MAIN_GROUP_ID"]
+            self.assertEqual(main.get_primary_target_group(), "-100LINKED")
+
+            main.os.environ["MAIN_GROUP_ID"] = "-100ENV"
+            self.assertEqual(main.get_primary_target_group(), "-100LINKED")
+        finally:
+            main.MAIN_GROUP_ID = original_main_group
+            main.linked_groups.clear()
+            main.linked_groups.update(original_linked)
+            if original_env_main is None:
+                main.os.environ.pop("MAIN_GROUP_ID", None)
+            else:
+                main.os.environ["MAIN_GROUP_ID"] = original_env_main
+
+    def test_get_primary_target_group_falls_back_to_linked(self):
+        original_main_group = main.MAIN_GROUP_ID
+        original_linked = set(main.linked_groups)
+        original_env_main = main.os.environ.get("MAIN_GROUP_ID")
+        try:
+            main.MAIN_GROUP_ID = None
+            main.os.environ.pop("MAIN_GROUP_ID", None)
+            main.linked_groups.clear()
+            main.linked_groups.update({"-100B", "-100A"})
+            self.assertEqual(main.get_primary_target_group(), "-100A")
+        finally:
+            main.MAIN_GROUP_ID = original_main_group
+            main.linked_groups.clear()
+            main.linked_groups.update(original_linked)
+            if original_env_main is None:
+                main.os.environ.pop("MAIN_GROUP_ID", None)
+            else:
+                main.os.environ["MAIN_GROUP_ID"] = original_env_main
+
     def test_get_effective_mode_respects_admin_assistant_toggle_in_admin_lounge(self):
         main.ADMIN_LOUNGE_ID = "-123"
         main.admin_assistant_chats.discard("-123")

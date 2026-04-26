@@ -228,11 +228,11 @@ def _deauthorize_group_local(chat_id):
 
 
 def get_primary_target_group():
+    if linked_groups:
+        return sorted(linked_groups)[0]
     configured = _safe_chat_id(os.getenv("MAIN_GROUP_ID") or MAIN_GROUP_ID)
     if configured:
         return configured
-    if linked_groups:
-        return sorted(linked_groups)[0]
     return None
 
 
@@ -862,12 +862,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Generate Invite Link for Main Lounge
         if text_lower == "/invite" and (str(chat_id) == str(ADMIN_LOUNGE_ID) or is_alpha):
-            if not MAIN_GROUP_ID:
+            target_chat_id = get_primary_target_group()
+            if not target_chat_id:
                 try: await context.bot.send_message(chat_id=chat_id, text="⚠️ MAIN_GROUP_ID is not configured.")
                 except: pass
                 return
             try:
-                invite = await context.bot.create_chat_invite_link(chat_id=MAIN_GROUP_ID, member_limit=1)
+                invite = await context.bot.create_chat_invite_link(chat_id=target_chat_id, member_limit=1)
                 await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
             except Exception:
                 logging.error("Invite link generation failed", exc_info=True)
@@ -960,9 +961,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 promo_data = json.loads(response.text)
                 
                 # 2. Telegram Channel Pipeline
-                if MAIN_GROUP_ID:
+                promo_target_chat = get_primary_target_group()
+                if promo_target_chat:
                     promo_text = html.escape(promo_data.get('channel_promo', 'Upgrade to Clipsflow PRO!'))
-                    await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=f"📢 <b>PUPPY PROMO!</b> 🐾\n\n{promo_text}", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=promo_target_chat, text=f"📢 <b>PUPPY PROMO!</b> 🐾\n\n{promo_text}", parse_mode="HTML")
                 
                 # 3. The X/Twitter Pipeline
                 try:
@@ -1230,7 +1232,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
 
             if reply_text:
-                if chat_id in relay_chats and MAIN_GROUP_ID:
+                relay_target_chat = get_primary_target_group()
+                if chat_id in relay_chats and relay_target_chat:
                     import uuid
                     draft_id = str(uuid.uuid4())[:8]
                     relay_drafts[draft_id] = {
@@ -1238,7 +1241,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "reply_text": reply_text,
                         "user_name": user_name,
                         "origin_chat": chat_id,
-                        "target_chat": MAIN_GROUP_ID
+                        "target_chat": relay_target_chat,
                     }
                     
                     # Create Preview Msg
@@ -1274,15 +1277,16 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 4. ADMIN RULE REMINDER
     if (chat_id == ADMIN_LOUNGE_ID or is_alpha) and update.message.text:
         if "remind the group of the rules" in update.message.text.lower():
-            if MAIN_GROUP_ID:
+            rules_target_chat = get_primary_target_group()
+            if rules_target_chat:
                 try:
                     rules_caption = "🐾 **Lounge Rules Reminder** 🐾\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n*The Shadow Guardian is watching...*"
                     image_path = os.getenv("RULES_IMAGE_PATH", "pupbot.jpg")
                     if os.path.exists(image_path):
                         with open(image_path, 'rb') as f_img:
-                            await context.bot.send_photo(chat_id=MAIN_GROUP_ID, photo=f_img, caption=rules_caption, parse_mode='Markdown')
+                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='Markdown')
                     else:
-                        await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=rules_caption, parse_mode='Markdown')
+                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='Markdown')
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
                 except Exception:
                     logging.error("Rule reminder broadcast failed", exc_info=True)
