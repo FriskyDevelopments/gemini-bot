@@ -116,7 +116,9 @@ Available commands for developers:
 • /ticket - Report structured bugs to GitHub
 • /ping - Send logic feedback
 
-<i>Awaiting commands. Type /antigravity to toggle off.</i>"""
+<i>Awaiting commands.</i>
+
+<i>Type /antigravity to toggle off.</i>"""
 
 ALCHEMY_MENU_TEXT = """🔮 <b>STIX MΛGIC ALCHEMY</b>
 
@@ -1217,6 +1219,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 img_bytes = await photo_file.download_as_bytearray()
                 prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
                 
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             response = await model.generate_content_async(prompt_list)
             
             # Catch safety blocking
