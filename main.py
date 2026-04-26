@@ -116,7 +116,9 @@ Available commands for developers:
 • /ticket - Report structured bugs to GitHub
 • /ping - Send logic feedback
 
-<i>Awaiting commands. Type /antigravity to toggle off.</i>"""
+<i>Awaiting commands.</i>
+
+<i>Type /antigravity to toggle off.</i>"""
 
 ALCHEMY_MENU_TEXT = """🔮 <b>STIX MΛGIC ALCHEMY</b>
 
@@ -279,20 +281,6 @@ def get_effective_mode(chat_id):
 
 def is_admin_lounge_chat(chat_id):
     return _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID)
-
-
-def get_active_menu_text(chat_id):
-    mode = get_effective_mode(chat_id)
-    # Admin Lounge defaults to Admin Assistant when no explicit persona toggle is active.
-    if mode == "puppy" and is_admin_lounge_chat(chat_id):
-        mode = "admin_assistant"
-    menu_map = {
-        "puppy": MENU_TEXT,
-        "antigravity": ANTIGRAVITY_MENU_TEXT,
-        "alchemy": ALCHEMY_MENU_TEXT,
-        "admin_assistant": ADMIN_ASSISTANT_MENU_TEXT,
-    }
-    return menu_map.get(mode, MENU_TEXT)
 
 
 def validate_link_target_chat(target_chat_id, admin_chat_id):
@@ -618,7 +606,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
             try:
-                active_menu = get_active_menu_text(chat_id)
+                active_menu = MENU_TEXT
+                effective_mode = get_effective_mode(chat_id)
+                if effective_mode == "antigravity":
+                    active_menu = ANTIGRAVITY_MENU_TEXT
+                elif effective_mode == "alchemy":
+                    active_menu = ALCHEMY_MENU_TEXT
+                elif effective_mode == "admin_assistant":
+                    active_menu = ADMIN_ASSISTANT_MENU_TEXT
                 await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
@@ -1218,17 +1213,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
             
-            try:
-                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-            except Exception as chat_action_error:
-                logging.debug(f"Ignored chat action error: {chat_action_error}")
-
             prompt_list = [prompt]
             if getattr(update.message, 'photo', None):
                 photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
                 img_bytes = await photo_file.download_as_bytearray()
                 prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
                 
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             response = await model.generate_content_async(prompt_list)
             
             # Catch safety blocking
@@ -1373,7 +1364,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "show_menu":
         await query.answer()
-        active_menu = get_active_menu_text(chat_id)
+        active_menu = MENU_TEXT
+        effective_mode = get_effective_mode(chat_id)
+        if effective_mode == "antigravity":
+            active_menu = ANTIGRAVITY_MENU_TEXT
+        elif effective_mode == "alchemy":
+            active_menu = ALCHEMY_MENU_TEXT
+        elif effective_mode == "admin_assistant":
+            active_menu = ADMIN_ASSISTANT_MENU_TEXT
         await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
         return
 

@@ -31,7 +31,3 @@
 ## 2026-04-23 - [Mode Exit Discoverability]
 **Learning:** In persona-driven interfaces, users may forget how to return to the default state. Explicit "Type /command to toggle off" hints in the persona-specific menus significantly reduce friction and improve user autonomy.
 **Action:** Always include exit/toggle-off instructions within the header or footer of mode-specific menus.
-
-## 2026-05-22 - [Persona Toggle Discoverability]
-**Learning:** When users enter specialized persona modes (like developer or wizard modes), they often forget the command used to enter it, making them feel "stuck" in that mode.
-**Action:** Include explicit toggle-off instructions (e.g., "Type /mode to toggle off") within the persona's help menu to ensure a clear exit path.
