@@ -15,6 +15,7 @@ import urllib.request
 import urllib.parse
 import io
 import html
+from difflib import SequenceMatcher
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CallbackQueryHandler, filters
@@ -115,9 +116,7 @@ Available commands for developers:
 • /ticket - Report structured bugs to GitHub
 • /ping - Send logic feedback
 
-<i>Awaiting commands.</i>
-
-<i>Type /antigravity to toggle off.</i>"""
+<i>Awaiting commands. Type /antigravity to toggle off.</i>"""
 
 ALCHEMY_MENU_TEXT = """🔮 <b>STIX MΛGIC ALCHEMY</b>
 
@@ -178,7 +177,10 @@ def save_state():
 
 
 def _safe_chat_id(value):
-    return str(value) if value is not None else ""
+    s = str(value) if value is not None else ""
+    if re.match(r"^-?\d+$", s):
+        return s
+    return ""
 
 
 def _read_authorized_groups():
@@ -268,10 +270,21 @@ def get_mode(chat_id):
     return "puppy"
 
 
+def get_effective_mode(chat_id):
+    mode_name = get_mode(chat_id)
+    if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
+        return mode_name
+    return "puppy"
+
+
+def is_admin_lounge_chat(chat_id):
+    return _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID)
+
+
 def get_active_menu_text(chat_id):
-    mode = get_mode(chat_id)
+    mode = get_effective_mode(chat_id)
     # Admin Lounge defaults to Admin Assistant when no explicit persona toggle is active.
-    if mode == "puppy" and _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID):
+    if mode == "puppy" and is_admin_lounge_chat(chat_id):
         mode = "admin_assistant"
     menu_map = {
         "puppy": MENU_TEXT,
@@ -282,13 +295,47 @@ def get_active_menu_text(chat_id):
     return menu_map.get(mode, MENU_TEXT)
 
 
+def validate_link_target_chat(target_chat_id, admin_chat_id):
+    target_chat_id = _safe_chat_id(target_chat_id)
+    admin_chat_id = _safe_chat_id(admin_chat_id)
+    if target_chat_id == admin_chat_id:
+        return False, "⚠️ Send the code in the target group, not Admin Lounge."
+
+    configured_main_group = _safe_chat_id(os.getenv("MAIN_GROUP_ID") or MAIN_GROUP_ID)
+    if configured_main_group and target_chat_id != configured_main_group:
+        return (
+            False,
+            "⛔ This handshake can only be completed in the configured Main Group.\n"
+            f"Expected: <code>{configured_main_group}</code>",
+        )
+
+    return True, ""
+
+
+def is_admin_status(status):
+    return (status or "").lower() in {"creator", "administrator"}
+
+
+async def is_user_chat_admin(context: ContextTypes.DEFAULT_TYPE, chat_id: str, user_id: str):
+    try:
+        member = await context.bot.get_chat_member(chat_id=chat_id, user_id=int(user_id))
+        return is_admin_status(getattr(member, "status", ""))
+    except Exception:
+        return False
+
+
 def prevent_echo_reply(mode_name, user_text, reply_text):
     def normalize_text(value):
         return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
 
     user_norm = normalize_text(user_text)
     reply_norm = normalize_text(reply_text)
-    too_similar = bool(user_norm) and (user_norm == reply_norm or (reply_norm.startswith(user_norm) and len(reply_norm) <= len(user_norm) + 20))
+    similarity = SequenceMatcher(None, user_norm, reply_norm).ratio() if user_norm and reply_norm else 0.0
+    too_similar = bool(user_norm) and (
+        user_norm == reply_norm
+        or (reply_norm.startswith(user_norm) and len(reply_norm) <= len(user_norm) + 20)
+        or similarity >= 0.92
+    )
 
     if mode_name == "antigravity" and too_similar:
         return "Antigravity online. I can help immediately—share the target outcome, technical stack, constraints, and deadline."
@@ -309,15 +356,20 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
     admin_owner_last_refresh = now
     try:
         admins = await context.bot.get_chat_administrators(chat_id=ADMIN_LOUNGE_ID)
-        changed = False
+        refreshed_ids = set()
         for admin in admins:
-            if getattr(admin, "status", "") == "creator":
+            status = getattr(admin, "status", "")
+            if is_admin_status(status):
                 uid = _safe_chat_id(admin.user.id)
-                if uid not in dynamic_alpha_ids:
-                    dynamic_alpha_ids.add(uid)
-                    changed = True
+                if uid:
+                    refreshed_ids.add(uid)
+
+        changed = refreshed_ids != dynamic_alpha_ids
         if changed:
+            dynamic_alpha_ids.clear()
+            dynamic_alpha_ids.update(refreshed_ids)
             save_state()
+            logging.info(f"Refreshed dynamic alpha roster: {len(dynamic_alpha_ids)} admins discovered.")
     except Exception as e:
         logging.debug(f"Could not refresh admin owner ids: {e}")
 
@@ -331,7 +383,7 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 
 
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
-    role = "Owner/Alpha" if is_alpha else "Lounge member"
+    role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
     return f"{user_name} ({user_id}) - {role}"
 
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN") or os.getenv("GITHUB_TOKEN")
@@ -471,7 +523,6 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
             formatted_text = formatted_text.replace(img_match2.group(0), "")
     
     # ── 🔊 TTS Voice Reply (Groq PlayAI) ── #
-    voice_sent = False
     try:
         import httpx, io
         await context.bot.send_chat_action(chat_id=target_chat, action="record_voice")
@@ -486,7 +537,6 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
         audio_buf = io.BytesIO(tts_resp.content)
         audio_buf.name = "pupbot_voice.wav"
         await context.bot.send_voice(chat_id=target_chat, voice=audio_buf, reply_to_message_id=target_reply_id)
-        voice_sent = True
         logging.info(f"✅ AI Voice responded back to {user_name} (Chat {target_chat}) successfully.")
     except Exception as tts_err:
         logging.info("Pupbot TTS failed, falling back to text: %s", tts_err)
@@ -496,12 +546,12 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
         try:
             await context.bot.send_photo(chat_id=target_chat, photo=image_url, reply_to_message_id=target_reply_id)
             logging.info(f"✅ AI Image sent to {user_name} successfully.")
-        except Exception as img_err:
-            logging.error(f"Failed to send pollination image: {img_err}")
-            formatted_text += f"\n\n[Failed to send image: {img_err}]"
+        except Exception:
+            logging.error("Failed to send pollination image", exc_info=True)
+            formatted_text += "\n\n[Failed to send generated image]"
 
     # Always send text too (readable on desktop / if voice failed)
-    if not voice_sent and formatted_text.strip():
+    if formatted_text.strip():
         # Smart paragraph chunker to avoid cutting middle of words or HTML tags
         paragraphs = formatted_text.split('\n')
         chunks = []
@@ -623,14 +673,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if text_lower.startswith("/link_group"):
-            if not is_alpha:
-                return
             parts = text.split(maxsplit=1)
             if len(parts) == 1:
-                if _safe_chat_id(chat_id) != _safe_chat_id(ADMIN_LOUNGE_ID):
+                if not is_admin_lounge_chat(chat_id):
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text="⛔ Run <code>/link_group</code> in the Admin Lounge first to create a handshake code.",
+                        parse_mode="HTML",
+                    )
+                    return
+                is_admin_lounge_member = await is_user_chat_admin(context, chat_id, user_id)
+                if not (is_alpha or is_admin_lounge_member):
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="⛔ Only admins of this lounge can generate link codes.",
                         parse_mode="HTML",
                     )
                     return
@@ -643,9 +699,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=(
                         "🔐 <b>Link code created.</b>\n"
                         f"Code: <code>{code}</code>\n"
-                        "Now go to the target group and send:\n"
+                        "Now go to the Main Group and send:\n"
                         f"<code>/link_group {code}</code>\n"
-                        f"This code expires in {LINK_CODE_TTL_SECONDS // 60} minutes."
+                        f"This code expires in {LINK_CODE_TTL_SECONDS // 60} minutes.\n"
+                        "The bot only accepts this handshake in the configured Main Group."
                     ),
                     parse_mode="HTML",
                 )
@@ -662,13 +719,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text="❌ Link code expired. Generate a new one in Admin Lounge.")
                 return
             admin_chat_id = _safe_chat_id(link_payload.get("admin_chat_id"))
-            issuer_user_id = _safe_chat_id(link_payload.get("issuer_user_id"))
-            if _safe_chat_id(user_id) != issuer_user_id and not is_alpha:
-                await context.bot.send_message(chat_id=chat_id, text="⛔ Only the code issuer or an alpha can complete this link.")
-                return
             target_chat_id = _safe_chat_id(chat_id)
-            if target_chat_id == admin_chat_id:
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ Send the code in the target group, not Admin Lounge.")
+
+            is_valid_target, target_error = validate_link_target_chat(target_chat_id, admin_chat_id)
+            if not is_valid_target:
+                await context.bot.send_message(chat_id=chat_id, text=target_error, parse_mode="HTML")
+                return
+
+            is_target_admin = await is_user_chat_admin(context, target_chat_id, user_id)
+            if not (is_target_admin or is_alpha):
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⛔ Only an admin of this group (or alpha) can complete the link handshake.",
+                    parse_mode="HTML",
+                )
                 return
 
             linked_groups.add(target_chat_id)
@@ -810,9 +874,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 invite = await context.bot.create_chat_invite_link(chat_id=MAIN_GROUP_ID, member_limit=1)
                 await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
-            except Exception as e:
-                try: await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to generate link. Make sure I am an admin in the main lounge!\nError: {e}")
-                except: pass
+            except Exception:
+                logging.error("Invite link generation failed", exc_info=True)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate invite link.</b> Please ensure the bot has proper administrative permissions.", parse_mode="HTML")
+                except:
+                    pass
             return
 
         # Start Ticketing
@@ -861,7 +928,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logging.error(f"Github push error: {e}")
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>JULES SYSTEM: ONLINE.</b>\nAntigravity has received your feedback and it is logged to GitHub.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>JULES SYSTEM: ONLINE.</b>\nAntigravity has received your feedback and it is logged to GitHub.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
             else:
                 keyboard = [
@@ -877,7 +944,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Omni-Channel Promo Logic
-        if "promo" in text_lower and str(chat_id) == str(ADMIN_LOUNGE_ID):
+        if text_lower == "/promo" and str(chat_id) == str(ADMIN_LOUNGE_ID) and is_alpha:
             try:
                 await context.bot.send_message(chat_id=chat_id, text="🐾 <i>Wags aggressively</i> Acknowledged, Master! Generating Omni-Channel Promo blast...", parse_mode="HTML")
                 
@@ -940,10 +1007,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     dm_status = f"⚠️ DM matrix failed: {e}"
 
                 await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
-            except Exception as promo_err:
-                import traceback
-                error_trace = traceback.format_exc()
-                logging.error(f"Promo generation failed:\\n{error_trace}")
+            except Exception:
+                logging.error("Promo generation failed", exc_info=True)
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> An internal error occurred during generation.", parse_mode="HTML")
                 except:
@@ -963,7 +1028,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if text == ANTIGRAVITY_BYPASS_PASSWORD:
+                if secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     antigravity_chats.add(chat_id)
                     if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
                     del ticket_states[user_id]
@@ -995,7 +1060,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 del ticket_states[user_id]
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>Comment Saved!</b> Antigravity has received your logic feedback.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="✅ <b>Comment Saved!</b> Antigravity has received your logic feedback.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "project_other":
@@ -1010,7 +1075,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_state()
                 try:
                     safe_project = html.escape(project)
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML")
+                    keyboard = [
+                        [InlineKeyboardButton("⬅️ Back", callback_data="ticket_back"),
+                         InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML", reply_markup=reply_markup)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
@@ -1084,8 +1154,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
         
         try:
-            mode_name = get_mode(chat_id)
-            effective_mode = mode_name
+            mode_name = get_effective_mode(chat_id)
             active_system_prompt = SYSTEM_PROMPT
 
             if mode_name == "antigravity":
@@ -1112,9 +1181,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Do not mirror user text. Transform it into polished creative output.\n"
                     f"Message: {user_text}"
                 )
-            elif str(chat_id) == str(ADMIN_LOUNGE_ID):
-                effective_mode = "admin_assistant"
-                if chat_id in relay_chats:
+            elif mode_name == "admin_assistant":
+                if chat_id in relay_chats and is_admin_lounge_chat(chat_id):
                     active_system_prompt = SYSTEM_PROMPT
                     prompt = (
                         f"{SYSTEM_PROMPT}\n"
@@ -1122,20 +1190,18 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "Address the main lounge directly, not the admin operator.]\n"
                         f"Message: {user_text}"
                     )
-                elif mode_name == "admin_assistant":
-                    active_system_prompt = ADMIN_ASSISTANT_PROMPT
-                    prompt = (
-                        f"{ADMIN_ASSISTANT_PROMPT}\n"
-                        f"[IDENTITY: {identity_context}]\n"
-                        "You are in admin operations mode. Prioritize execution-ready output.\n"
-                        f"Message: {user_text}"
-                    )
                 else:
                     active_system_prompt = ADMIN_ASSISTANT_PROMPT
+                    alpha_notice = (
+                        "This speaker is the owner/alpha. Their request takes highest priority."
+                        if is_alpha
+                        else "This speaker is an admin-group participant."
+                    )
                     prompt = (
                         f"{ADMIN_ASSISTANT_PROMPT}\n"
-                        f"[SYSTEM NOTICE: You are speaking privately to admins in the backstage lounge.]\n"
                         f"[IDENTITY: {identity_context}]\n"
+                        f"[SYSTEM NOTICE: {alpha_notice}]\n"
+                        "You are in admin operations mode. Prioritize execution-ready output and concrete next actions.\n"
                         f"Message: {user_text}"
                     )
             else:
@@ -1168,7 +1234,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Catch safety blocking
             try:
                 reply_text = response.text.replace("[DELETE]", "").strip()
-                reply_text = prevent_echo_reply(effective_mode, user_text, reply_text)
+                reply_text = prevent_echo_reply(mode_name, user_text, reply_text)
             except ValueError as ve:
                 reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
 
@@ -1227,8 +1293,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=rules_caption, parse_mode='Markdown')
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
-                except Exception as e:
-                    await context.bot.send_message(chat_id=chat_id, text=f"❌ Failed to send rules to main lounge: {e}")
+                except Exception:
+                    logging.error("Rule reminder broadcast failed", exc_info=True)
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Internal broadcast error.", parse_mode="HTML")
+                    except: pass
             else:
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
             return
@@ -1472,4 +1541,3 @@ if __name__ == '__main__':
             time.sleep(3600)
     except Exception as e:
         logging.error(f"Unexpected error in bot loop: {e}")
-

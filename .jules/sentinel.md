@@ -24,3 +24,8 @@
 **Vulnerability:** User-facing error messages included full stack traces via `traceback.format_exc()`, and the 'antigravity' bypass used a hardcoded, case-insensitive substring match for a password.
 **Learning:** Providing stack traces to end-users facilitates reconnaissance by exposing internal file structures and logic flows. Using `in` for password comparisons allows for significant entropy reduction and accidental bypasses.
 **Prevention:** Strictly separate internal logging from user-facing responses. Use `logging.error(..., exc_info=True)` for developers and generic "Internal error" messages for users. Use exact string equality (`==`) and environment-managed secrets for all authentication bypasses.
+
+## 2025-06-19 - Broad Keyword Triggers & Missing Authorization
+**Vulnerability:** Sensitive cross-platform operations (like promo blasts) were triggered by broad substring matches ("promo" in text_lower) without verifying the user's privileged status (is_alpha).
+**Learning:** Using keyword matching instead of strict command prefixes (/) for high-impact actions allows for accidental triggers and bypasses intended authorization boundaries if those checks are assumed from context (e.g., chat ID) rather than user identity.
+**Prevention:** Always use strict command prefix matching for sensitive operations and explicitly verify user authorization (is_alpha) regardless of the chat context.
