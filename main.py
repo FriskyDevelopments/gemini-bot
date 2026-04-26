@@ -626,11 +626,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     debuggers.add(parts[1])
                     save_state()
                     try:
-                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} added to debuggers list.")
+                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} added to debuggers list.", reply_markup=CLOSE_KEYBOARD)
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 else:
                     try:
-                         await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>")
+                         await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>", reply_markup=CLOSE_KEYBOARD)
                     except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -641,13 +641,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             authorized_groups = _read_authorized_groups()
             if chat_id in authorized_groups:
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🐶 This group is already authorized!")
+                    await context.bot.send_message(chat_id=chat_id, text="🐶 This group is already authorized!", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             if _authorize_group_local(chat_id):
-                await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             else:
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         if text_lower == "/admin_assistant":
@@ -656,13 +656,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if chat_id in admin_assistant_chats:
                 admin_assistant_chats.remove(chat_id)
                 save_state()
-                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 return
             admin_assistant_chats.add(chat_id)
             antigravity_chats.discard(chat_id)
             alchemy_chats.discard(chat_id)
             save_state()
-            await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML")
+            await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         if text_lower.startswith("/link_group"):
@@ -767,7 +767,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             parts = text.split(maxsplit=1)
             if len(parts) < 2:
-                await context.bot.send_message(chat_id=chat_id, text="Usage: /unlink_group <chat_id>")
+                await context.bot.send_message(chat_id=chat_id, text="Usage: /unlink_group <chat_id>", reply_markup=CLOSE_KEYBOARD)
                 return
             target_chat_id = _safe_chat_id(parts[1].strip())
             removed = target_chat_id in linked_groups
@@ -775,9 +775,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _deauthorize_group_local(target_chat_id)
             save_state()
             if removed:
-                await context.bot.send_message(chat_id=chat_id, text=f"✅ Unlinked group <code>{target_chat_id}</code>.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"✅ Unlinked group <code>{target_chat_id}</code>.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             else:
-                await context.bot.send_message(chat_id=chat_id, text=f"ℹ️ Group <code>{target_chat_id}</code> was not linked.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"ℹ️ Group <code>{target_chat_id}</code> was not linked.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         # Antigravity developer mode toggle (Private DM Only, unless bypassed)
@@ -789,7 +789,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 antigravity_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🔄 **Antigravity Mode Deactivated.** Returning to Pupbot persona.")
+                    await context.bot.send_message(chat_id=chat_id, text="🔄 <b>Antigravity Mode Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -826,7 +826,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 alchemy_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -835,7 +835,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             admin_assistant_chats.discard(chat_id)
             save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
             
@@ -847,14 +847,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 relay_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             
             relay_chats.add(chat_id)
             save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -870,7 +870,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 logging.error("Invite link generation failed", exc_info=True)
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate invite link.</b> Please ensure the bot has proper administrative permissions.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate invite link.</b> Please ensure the bot has proper administrative permissions.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except:
                     pass
             return
@@ -900,7 +900,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
             else:
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ Access Denied. You must be an authorized debugger.")
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ Access Denied. You must be an authorized debugger.", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -1033,7 +1033,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     del ticket_states[user_id]
                     save_state()
                     try:
-                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML")
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "ping_comment_entry":
@@ -1073,7 +1073,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                          InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML", reply_markup=reply_markup)
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug (max 2000 chars).", parse_mode="HTML", reply_markup=reply_markup)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
@@ -1273,14 +1273,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "remind the group of the rules" in update.message.text.lower():
             if MAIN_GROUP_ID:
                 try:
-                    rules_caption = "🐾 **Lounge Rules Reminder** 🐾\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n*The Shadow Guardian is watching...*"
+                    rules_caption = "<b>🐾 Lounge Rules Reminder 🐾</b>\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n<i>The Shadow Guardian is watching...</i>"
                     image_path = os.getenv("RULES_IMAGE_PATH", "pupbot.jpg")
                     if os.path.exists(image_path):
                         with open(image_path, 'rb') as f_img:
-                            await context.bot.send_photo(chat_id=MAIN_GROUP_ID, photo=f_img, caption=rules_caption, parse_mode='Markdown')
+                            await context.bot.send_photo(chat_id=MAIN_GROUP_ID, photo=f_img, caption=rules_caption, parse_mode='HTML')
                     else:
-                        await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=rules_caption, parse_mode='Markdown')
-                    await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
+                        await context.bot.send_message(chat_id=MAIN_GROUP_ID, text=rules_caption, parse_mode='HTML')
+                    await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!", reply_markup=CLOSE_KEYBOARD)
                 except Exception:
                     logging.error("Rule reminder broadcast failed", exc_info=True)
                     try:
@@ -1311,7 +1311,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if action == "relay_cancel":
             del relay_drafts[draft_id]
-            await query.edit_message_text("❌ <b>Relay message cancelled.</b>", parse_mode="HTML")
+            await query.edit_message_text("❌ <b>Relay message cancelled.</b>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
             
         elif action == "relay_send":
@@ -1325,7 +1325,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 None
             )
             del relay_drafts[draft_id]
-            await query.edit_message_text("✅ <b>Response transmitted to Main Lounge successfully.</b>", parse_mode="HTML")
+            await query.edit_message_text("✅ <b>Response transmitted to Main Lounge successfully.</b>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
             
         elif action == "relay_retry":
@@ -1483,7 +1483,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:",
+            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to (allowed: alphanumeric, dots, underscores, and dashes):",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
