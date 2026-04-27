@@ -31,3 +31,7 @@
 ## 2026-04-23 - [Mode Exit Discoverability]
 **Learning:** In persona-driven interfaces, users may forget how to return to the default state. Explicit "Type /command to toggle off" hints in the persona-specific menus significantly reduce friction and improve user autonomy.
 **Action:** Always include exit/toggle-off instructions within the header or footer of mode-specific menus.
+
+## 2026-05-20 - [Input Guardrails & Chat Hygiene]
+**Learning:** Adding explicit character hints to manual input prompts (e.g., "alphanumeric, dots, underscores, dashes") reduces user frustration by clarifying validation rules before submission. Additionally, attaching "🗑️ Close" buttons to welcome messages and one-off system alerts empowers users to maintain a clean chat history.
+**Action:** Always include character constraints in text-entry prompts and use a standard 'Close' button for ephemeral/non-essential bot messages.

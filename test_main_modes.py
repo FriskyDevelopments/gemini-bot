@@ -35,7 +35,7 @@ class TestMainModes(unittest.TestCase):
         os.environ.pop("MAIN_GROUP_ID", None)
 
     def test_get_mode_precedence(self):
-        chat_id = "chat-1"
+        chat_id = "-123"
         main.antigravity_chats.add(chat_id)
         main.alchemy_chats.add(chat_id)
         main.admin_assistant_chats.add(chat_id)
