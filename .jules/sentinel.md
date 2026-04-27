@@ -29,3 +29,8 @@
 **Vulnerability:** Sensitive cross-platform operations (like promo blasts) were triggered by broad substring matches ("promo" in text_lower) without verifying the user's privileged status (is_alpha).
 **Learning:** Using keyword matching instead of strict command prefixes (/) for high-impact actions allows for accidental triggers and bypasses intended authorization boundaries if those checks are assumed from context (e.g., chat ID) rather than user identity.
 **Prevention:** Always use strict command prefix matching for sensitive operations and explicitly verify user authorization (is_alpha) regardless of the chat context.
+
+## 2025-06-26 - Telegram Bypass & HTML Injection
+**Vulnerability:** Spammers could bypass the banned word filter by editing a previously clean message, and admin reports were vulnerable to HTML injection when switching to 'HTML' parse mode.
+**Learning:** Message handlers in Telegram bots must use 'effective_message' to capture edits, and all user-provided data must be escaped when using HTML formatting for internal reports.
+**Prevention:** Always use 'update.effective_message' for security filters and apply 'html.escape()' to all dynamic content in HTML-formatted messages.
