@@ -582,7 +582,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 invitations[str(member.id)] = inviter_name
                 save_state()
             try:
-                keyboard = [[InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")]]
+                keyboard = [
+                    [InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")],
+                    [CLOSE_BUTTON]
+                ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -1280,14 +1283,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             rules_target_chat = get_primary_target_group()
             if rules_target_chat:
                 try:
-                    rules_caption = "🐾 **Lounge Rules Reminder** 🐾\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n*The Shadow Guardian is watching...*"
+                    rules_caption = "🐾 <b>Lounge Rules Reminder</b> 🐾\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n<i>The Shadow Guardian is watching...</i>"
                     image_path = os.getenv("RULES_IMAGE_PATH", "pupbot.jpg")
                     if os.path.exists(image_path):
                         with open(image_path, 'rb') as f_img:
-                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='Markdown')
+                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='HTML', reply_markup=CLOSE_KEYBOARD)
                     else:
-                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='Markdown')
-                    await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
+                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='HTML', reply_markup=CLOSE_KEYBOARD)
+                    await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!", reply_markup=CLOSE_KEYBOARD)
                 except Exception:
                     logging.error("Rule reminder broadcast failed", exc_info=True)
                     try:
@@ -1490,7 +1493,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:",
+            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:\n<i>(alphanumeric, dots, underscores, dashes)</i>",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
