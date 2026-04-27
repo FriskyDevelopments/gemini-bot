@@ -566,7 +566,8 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
 
 
 async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.from_user: return
+    msg = update.effective_message
+    if not msg or not msg.from_user: return
     
     user_id = str(update.effective_user.id)
     chat_id = str(update.effective_chat.id)
@@ -574,7 +575,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cleanup_expired_link_codes()
     
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
-    if update.message.new_chat_members:
+    if update.message and update.message.new_chat_members:
         inviter = update.message.from_user
         inviter_name = inviter.username or inviter.first_name
         for member in update.message.new_chat_members:
@@ -593,7 +594,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 1.5 DETERMINISTIC TICKETING (JULES)
-    if update.message.text:
+    if update.message and update.message.text:
         text = update.message.text.strip()
         
         # Remove @botusername suffix for commands (e.g. /menu@GeminiPUPBot -> /menu)
@@ -1113,7 +1114,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     # 2. CHECK FOR SPAMMERS (Check both new and edited messages)
-    msg = update.effective_message
     if msg and (msg.text or msg.caption):
         content = msg.text or msg.caption
         content_lower = content.lower()
@@ -1142,6 +1142,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.info(f"Could not process spam report/deletion: {e}")
             return # Halt further processing
+
+    if not update.message:
+        return
                 
     # 3. CONVERSATIONAL LOGIC
     # Trigger if alpha/authorized, bot mention, direct reply, or occasional ambient reply.
