@@ -40,11 +40,29 @@ MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 groq_api_key = os.getenv("GROQ_API_KEY")
 ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
 
-SYSTEM_PROMPT = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'! 
-This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle. 
-Your primary goal is to ENERGIZE the room, keep the party highly interactive, and make the lounge engaging! 
+BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
+
+_SYSTEM_PROMPT_FRIENDLY = """You are Geminipupbot, the warm and engaging host of the 'Pup Lounge'.
+Your role is to keep conversation flowing, welcome members, and be genuinely helpful.
+
+Guidelines:
+• Be friendly and approachable — not goofy or excessively playful.
+• Avoid barking, woofing, whimpering, or overusing dog-play terminology unless a user explicitly requests it.
+• Do not overuse emojis; use them sparingly and purposefully.
+• Do not use childish or nonsensical phrasing.
+• Be concise — keep responses focused and helpful.
+• Help members feel welcome and engaged without derailing into roleplay.
+• Never mirror the exact input back to the user; always advance the conversation.
+
+If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a great lounge host!"""
+
+_SYSTEM_PROMPT_PLAYFUL = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'!
+This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle.
+Your primary goal is to ENERGIZE the room, keep the party highly interactive, and make the lounge engaging!
 Act as the ultimate MC/Party Host: ask playful icebreaker questions, hype up the members, use pup-play terminology naturally (barks, tail wags, whimpers, treats, ear scratches), and start fun conversations!
 If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a legendary pup host!"""
+
+SYSTEM_PROMPT = _SYSTEM_PROMPT_FRIENDLY if BOT_TONE != "playful" else _SYSTEM_PROMPT_PLAYFUL
 
 ANTIGRAVITY_PROMPT = """You are Antigravity, an elite AI developer and infrastructure engineer at Google Deepmind.
 You are speaking strictly in a private, encrypted channel with your human counterpart (Frisky).
@@ -90,12 +108,13 @@ Replace {url_encoded_detailed_description} with a highly descriptive, comma-sepa
 
 MENU_TEXT = """🐾 <b>Welcome to Pupbot!</b> 🥂
 
-I'm your lively lounge host. Here are my commands:
+I'm your lounge host. Here are my commands:
 • /menu (or /help) - Show this menu
 • /ping [msg] - Send feedback to the dev team
 • /ticket - Open the bug reporter (Debuggers)
 
 👑 <b>Admin / Alpha Commands:</b>
+• /pupsona [friendly|playful] - View or set the bot's tone
 • /admin_assistant - Toggle operations assistant persona
 • /antigravity - Toggle developer mode
 • /alchemy - Toggle creative wizard mode
@@ -108,7 +127,7 @@ I'm your lively lounge host. Here are my commands:
 • /authorize_group - Authorize current group
 • /add_debugger [id] - Add a ticket debugger
 
-<i>Arf! Start chatting or try a command!</i>"""
+<i>Start chatting or try a command!</i>"""
 
 ANTIGRAVITY_MENU_TEXT = """⚡ <b>ANTIGRAVITY SYSTEMS ONLINE</b>
 
@@ -374,7 +393,35 @@ def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
     role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
     return f"{user_name} ({user_id}) - {role}"
 
-github_token = os.getenv("GITHUB_PUPBOT_TOKEN") or os.getenv("GITHUB_TOKEN")
+
+async def _groq_text_fallback(system_prompt: str, user_text: str) -> str | None:
+    """Call Groq's OpenAI-compatible endpoint as a text-generation fallback.
+
+    Returns the response text on success, or None if Groq is unavailable / not configured.
+    """
+    import httpx
+    groq_key = os.getenv("GROQ_API_KEY")
+    if not groq_key:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "llama3-8b-8192",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_text},
+                    ],
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+    except Exception as groq_err:
+        logging.warning(f"Groq fallback also failed: {groq_err}")
+        return None
+
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -586,7 +633,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"Arf arf!! 🐾 Welcome to the Pup Lounge, {member.first_name}! 🥂✨ I'm Pupbot, your host! Grab a bowl, stretch those paws, and give the pack a bark! Who's ready to play?",
+                    text=f"👋 Welcome to the Pup Lounge, {html.escape(member.first_name)}! I'm Pupbot, your host. Feel free to introduce yourself and dive into the conversation! Tap <b>Open Menu</b> to see available commands. 🐾",
+                    parse_mode="HTML",
                     reply_markup=reply_markup
                 )
             except Exception as e: logging.debug(f"Ignored error: {e}")
@@ -634,6 +682,53 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                          await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
+            return
+
+        # /pupsona — inspect or set the bot's active persona / tone
+        if text_lower.startswith("/pupsona"):
+            if not is_alpha:
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ Only admins can view or change the persona settings.")
+                except Exception as e: logging.debug(f"Ignored error: {e}")
+                return
+            parts = text.split(maxsplit=1)
+            if len(parts) == 2:
+                new_tone = parts[1].strip().lower()
+                if new_tone in ("friendly", "playful"):
+                    global SYSTEM_PROMPT
+                    SYSTEM_PROMPT = _SYSTEM_PROMPT_FRIENDLY if new_tone == "friendly" else _SYSTEM_PROMPT_PLAYFUL
+                    try:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=f"✅ <b>Persona tone updated to <code>{html.escape(new_tone)}</code>.</b>\nThis change is in-memory only; set <code>BOT_TONE={html.escape(new_tone)}</code> in env to make it permanent.",
+                            parse_mode="HTML",
+                            reply_markup=CLOSE_KEYBOARD
+                        )
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                else:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="⚠️ Unknown tone. Valid options: <code>friendly</code> (default) or <code>playful</code>.",
+                            parse_mode="HTML",
+                        )
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+            else:
+                active_mode = get_effective_mode(chat_id)
+                current_tone = "playful" if SYSTEM_PROMPT == _SYSTEM_PROMPT_PLAYFUL else "friendly"
+                try:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            "🐾 <b>Persona Status</b>\n\n"
+                            f"• <b>Active Mode:</b> <code>{html.escape(active_mode)}</code>\n"
+                            f"• <b>Tone (default chat):</b> <code>{html.escape(current_tone)}</code>\n\n"
+                            "<i>Use <code>/pupsona friendly</code> or <code>/pupsona playful</code> to change tone.</i>"
+                        ),
+                        parse_mode="HTML",
+                        reply_markup=CLOSE_KEYBOARD
+                    )
+                except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
         # Command to authorize groups
@@ -1222,16 +1317,33 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
                 
             await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-            response = await model.generate_content_async(prompt_list)
-            
-            # Catch safety blocking
+            reply_text = None
+            used_fallback = False
             try:
-                reply_text = response.text.replace("[DELETE]", "").strip()
-                reply_text = prevent_echo_reply(mode_name, user_text, reply_text)
-            except ValueError as ve:
-                reply_text = f"⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
+                response = await model.generate_content_async(prompt_list)
+                # Catch safety blocking
+                try:
+                    reply_text = response.text.replace("[DELETE]", "").strip()
+                    reply_text = prevent_echo_reply(mode_name, user_text, reply_text)
+                except ValueError:
+                    reply_text = "⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
+            except Exception as gemini_err:
+                err_str = str(gemini_err)
+                # Check for transient / quota errors before attempting Groq fallback
+                is_transient = any(kw in err_str for kw in ("503", "UNAVAILABLE", "unavailable", "ResourceExhausted", "429", "quota"))
+                if is_transient and len(prompt_list) == 1:
+                    logging.warning(f"Gemini transient error — trying Groq fallback. Original: {gemini_err}")
+                    reply_text = await _groq_text_fallback(active_system_prompt, user_text)
+                    if reply_text:
+                        used_fallback = True
+                        reply_text = reply_text.replace("[DELETE]", "").strip()
+                        reply_text = prevent_echo_reply(mode_name, user_text, reply_text)
+                if not reply_text:
+                    raise gemini_err
 
             if reply_text:
+                if used_fallback:
+                    logging.info(f"Response delivered via Groq fallback for {user_name} in chat {chat_id}.")
                 relay_target_chat = get_primary_target_group()
                 if chat_id in relay_chats and relay_target_chat:
                     import uuid
