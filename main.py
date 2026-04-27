@@ -1138,9 +1138,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             log_id = ADMIN_LOUNGE_ID if ADMIN_LOUNGE_ID else chat_id
             try:
                 await context.bot.send_message(chat_id=log_id, text=report, parse_mode='HTML')
+            except Exception as e:
+                logging.info(f"Could not process spam report: {e}")
+            try:
                 await msg.delete()
             except Exception as e:
-                logging.info(f"Could not process spam report/deletion: {e}")
+                logging.info(f"Could not delete spam message: {e}")
             return # Halt further processing
 
     if not update.message:
