@@ -1328,9 +1328,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except ValueError:
                     reply_text = "⚙️ [AI SAFETY FILTER TRIPPED]: The response was blocked by Gemini content safety parameters."
             except Exception as gemini_err:
-                err_str = str(gemini_err)
+                err_str = str(gemini_err).lower()
                 # Check for transient / quota errors before attempting Groq fallback
-                is_transient = any(kw in err_str for kw in ("503", "UNAVAILABLE", "unavailable", "ResourceExhausted", "429", "quota"))
+                is_transient = any(kw in err_str for kw in ("503", "unavailable", "resourceexhausted", "429", "quota"))
+                # Groq fallback only supports text-only prompts; multi-modal (image) prompts are skipped
                 if is_transient and len(prompt_list) == 1:
                     logging.warning(f"Gemini transient error — trying Groq fallback. Original: {gemini_err}")
                     reply_text = await _groq_text_fallback(active_system_prompt, user_text)

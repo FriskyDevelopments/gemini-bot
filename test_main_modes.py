@@ -168,6 +168,7 @@ class TestMainModes(unittest.TestCase):
     def test_system_prompt_defaults_to_friendly(self):
         """Default BOT_TONE should produce a non-goofy system prompt."""
         self.assertNotIn("Arf arf", main.SYSTEM_PROMPT)
+        # Check only the preamble (first ~80 chars) for dog-play terms
         self.assertNotIn("wag", main.SYSTEM_PROMPT.lower()[:80])
         self.assertIn("Geminipupbot", main.SYSTEM_PROMPT)
 
@@ -186,8 +187,6 @@ class TestMainModes(unittest.TestCase):
 
     def test_system_prompt_selection_via_bot_tone(self):
         """SYSTEM_PROMPT selection follows BOT_TONE at module init."""
-        import importlib, sys
-
         original_system_prompt = main.SYSTEM_PROMPT
         try:
             with patch.dict(os.environ, {"BOT_TONE": "playful"}):
