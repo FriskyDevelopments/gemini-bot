@@ -1112,23 +1112,36 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
 
-    # 2. CHECK FOR SPAMMERS
-    if update.message.text:
-        text_lower = update.message.text.lower()
-        if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
-            spammer = update.message.from_user
-            spammer_name = spammer.username or spammer.first_name
-            inviter = invitations.get(spammer.id, "Unknown / Join Link")
+    # 2. CHECK FOR SPAMMERS (Check both new and edited messages)
+    msg = update.effective_message
+    if msg and (msg.text or msg.caption):
+        content = msg.text or msg.caption
+        content_lower = content.lower()
+        if BANNED_WORDS and any(bw in content_lower for bw in BANNED_WORDS):
+            spammer = msg.from_user
+            spammer_name = spammer.username or spammer.first_name or "Unknown"
+            inviter = invitations.get(str(spammer.id), "Unknown / Join Link")
+
+            # Escape for safe HTML delivery
+            safe_name = html.escape(spammer_name)
+            safe_inviter = html.escape(inviter)
+            safe_content = html.escape(content)
             
-            report = f"🚨 **SPAMMER DETECTED**\nMsg: {update.message.text}\n👤 Spammer: {spammer_name}\n🔑 Admitted by: {inviter}"
+            report = (
+                f"🚨 <b>SPAMMER DETECTED</b>\n"
+                f"<b>Msg:</b> {safe_content}\n"
+                f"<b>👤 Spammer:</b> {safe_name} (ID: {spammer.id})\n"
+                f"<b>🔑 Admitted by:</b> {safe_inviter}"
+            )
             
-            logging.info(report)
+            logging.info(f"Spam detected from {spammer.id} in {chat_id}")
             log_id = ADMIN_LOUNGE_ID if ADMIN_LOUNGE_ID else chat_id
             try:
-                await context.bot.send_message(chat_id=log_id, text=report)
-                await update.message.delete()
+                await context.bot.send_message(chat_id=log_id, text=report, parse_mode='HTML')
+                await msg.delete()
             except Exception as e:
-                logging.info(f"Could not send log report or delete message: {e}")
+                logging.info(f"Could not process spam report/deletion: {e}")
+            return # Halt further processing
                 
     # 3. CONVERSATIONAL LOGIC
     # Trigger if alpha/authorized, bot mention, direct reply, or occasional ambient reply.
@@ -1139,7 +1152,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_text_or_photo = bool(update.message.text or update.message.photo)
     
     if (is_alpha or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and has_text_or_photo:
-        user_text = update.message.text or update.message.caption or ""
+        # Enforce length limit to prevent resource exhaustion/DoS (truncate to 4000 chars)
+        user_text = (update.message.text or update.message.caption or "")[:4000]
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
