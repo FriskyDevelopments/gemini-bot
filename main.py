@@ -873,7 +873,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error("Invite link generation failed", exc_info=True)
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate link.</b> Make sure I am an admin in the main lounge and try again.", parse_mode="HTML")
-                except Exception:
+                except:
                     pass
             return
 
@@ -938,7 +938,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Omni-Channel Promo Logic
-        if "promo" in text_lower and is_admin_lounge_chat(chat_id) and is_alpha:
+        if "promo" in text_lower and str(chat_id) == str(ADMIN_LOUNGE_ID) and is_alpha:
             try:
                 await context.bot.send_message(chat_id=chat_id, text="🐾 <i>Wags aggressively</i> Acknowledged, Master! Generating Omni-Channel Promo blast...", parse_mode="HTML")
                 
@@ -976,11 +976,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     loop = asyncio.get_running_loop()
                     await loop.run_in_executor(None, lambda: client.create_tweet(text=promo_data.get('twitter_promo')))
                     twitter_status = "✅ Dispatched to Twitter."
-                except Exception as e:
-                    twitter_status = f"⚠️ Twitter skipped/failed: {e}"
+                except Exception:
+                    logging.error("Twitter promo failed", exc_info=True)
+                    twitter_status = "⚠️ Twitter skipped/failed."
 
                 # 4. The Free-User DM Matrix
-                dm_status = "⚠️ Supabase matrix skipped (SDK missing)."
+                dm_status = "⚠️ Supabase matrix skipped."
                 try:
                     from supabase import create_client, Client
                     supa_url = os.getenv("SUPABASE_URL")
@@ -995,10 +996,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 await context.bot.send_message(chat_id=u['telegram_id'], text=promo_data.get('dm_promo'))
                                 dm_count += 1
                                 await asyncio.sleep(0.05)
-                            except Exception: pass
+                            except Exception:
+                                pass
                         dm_status = f"✅ DMed {dm_count} Free-Tier users."
-                except Exception as e:
-                    dm_status = f"⚠️ DM matrix failed: {e}"
+                except Exception:
+                    logging.error("DM matrix failed", exc_info=True)
+                    dm_status = "⚠️ DM matrix failed."
 
                 await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
             except Exception as promo_err:
@@ -1281,10 +1284,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
                 except Exception:
                     logging.error("Failed to send rules to main lounge", exc_info=True)
-                    try:
-                        await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Please check my permissions and try again.", parse_mode="HTML")
-                    except Exception:
-                        pass
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Please check my permissions and try again.", parse_mode="HTML")
             else:
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
             return
