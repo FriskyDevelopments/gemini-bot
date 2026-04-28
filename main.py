@@ -873,7 +873,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error("Invite link generation failed", exc_info=True)
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate link.</b> Make sure I am an admin in the main lounge and try again.", parse_mode="HTML")
-                except:
+                except Exception:
                     pass
             return
 
@@ -938,7 +938,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Omni-Channel Promo Logic
-        if "promo" in text_lower and str(chat_id) == str(ADMIN_LOUNGE_ID) and is_alpha:
+        if "promo" in text_lower and is_admin_lounge_chat(chat_id) and is_alpha:
             try:
                 await context.bot.send_message(chat_id=chat_id, text="🐾 <i>Wags aggressively</i> Acknowledged, Master! Generating Omni-Channel Promo blast...", parse_mode="HTML")
                 
@@ -1283,7 +1283,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logging.error("Failed to send rules to main lounge", exc_info=True)
                     try:
                         await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to send rules to main lounge.</b> Please check my permissions and try again.", parse_mode="HTML")
-                    except:
+                    except Exception:
                         pass
             else:
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
