@@ -1128,7 +1128,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     # 2. CHECK FOR SPAMMERS
-    if msg and (msg.text or msg.caption) and not is_alpha:
+    if msg and (msg.text or msg.caption):
         full_text = (msg.text or "") + (msg.caption or "")
         text_lower = full_text.lower()
         if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
