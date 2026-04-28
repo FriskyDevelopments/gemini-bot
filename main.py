@@ -566,7 +566,8 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
 
 
 async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.from_user: return
+    msg = update.effective_message
+    if not msg or not msg.from_user: return
     
     user_id = str(update.effective_user.id)
     chat_id = str(update.effective_chat.id)
@@ -574,7 +575,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cleanup_expired_link_codes()
     
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
-    if update.message.new_chat_members:
+    if update.message and update.message.new_chat_members:
         inviter = update.message.from_user
         inviter_name = inviter.username or inviter.first_name
         for member in update.message.new_chat_members:
@@ -593,7 +594,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 1.5 DETERMINISTIC TICKETING (JULES)
-    if update.message.text:
+    if update.message and update.message.text:
         text = update.message.text.strip()
         
         # Remove @botusername suffix for commands (e.g. /menu@GeminiPUPBot -> /menu)
@@ -1026,14 +1027,16 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
+                target_chat = ticket_data.get(user_id, {}).get("target_chat_id")
                 if update.message.chat.type != "private":
-                    try:
-                        await update.message.delete()
-                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML")
-                    except: pass
-                    return
+                    if target_chat is not None and chat_id == str(target_chat):
+                        try:
+                            await update.message.delete()
+                            await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML")
+                        except: pass
+                        return
 
-                if secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
+                elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     target_chat = ticket_data.get(user_id, {}).get("target_chat_id", chat_id)
                     antigravity_chats.add(target_chat)
                     if target_chat in alchemy_chats: alchemy_chats.remove(target_chat)
@@ -1045,6 +1048,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if target_chat != chat_id:
                             await context.bot.send_message(chat_id=chat_id, text="✅ Antigravity activated in the target group.")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
+                    return
                 else:
                     del ticket_states[user_id]
                     ticket_data.pop(user_id, None)
@@ -1052,7 +1056,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     try:
                         await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
-                return
+                    return
             elif state == "ping_comment_entry":
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
@@ -1126,7 +1130,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     # 2. CHECK FOR SPAMMERS
-    msg = update.effective_message
     if msg and (msg.text or msg.caption) and not is_alpha:
         full_text = (msg.text or "") + (msg.caption or "")
         text_lower = full_text.lower()
@@ -1151,6 +1154,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.info(f"Could not send log report or delete message: {e}")
             return
+
+    if not update.message:
+        return
                 
     # 3. CONVERSATIONAL LOGIC
     # Trigger if alpha/authorized, bot mention, direct reply, or occasional ambient reply.
@@ -1267,7 +1273,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     }
                     
                     # Create Preview Msg
-                    import html
                     preview_lines = reply_text[:3000]
                     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
                     keyboard = [
@@ -1541,7 +1546,7 @@ if __name__ == '__main__':
     
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CallbackQueryHandler(callback_router))
-    app.add_handler(MessageHandler(filters.ALL, lounge_host))
+    app.add_handler(MessageHandler(filters.ALL | filters.UpdateType.EDITED_MESSAGE, lounge_host))
     
     # 🔥 Firebase / Google Cloud Vercel equivalent hosting logic
     port = int(os.environ.get("PORT", 8080))
