@@ -29,3 +29,8 @@
 **Vulnerability:** Sensitive cross-platform operations (like promo blasts) were triggered by broad substring matches ("promo" in text_lower) without verifying the user's privileged status (is_alpha).
 **Learning:** Using keyword matching instead of strict command prefixes (/) for high-impact actions allows for accidental triggers and bypasses intended authorization boundaries if those checks are assumed from context (e.g., chat ID) rather than user identity.
 **Prevention:** Always use strict command prefix matching for sensitive operations and explicitly verify user authorization (is_alpha) regardless of the chat context.
+
+## 2025-06-26 - Remote Activation & Password Isolation
+**Vulnerability:** Interactive authentication flows (like the antigravity bypass) permitted password entry in communal group chats, leading to credential leakage. Additionally, the spam detector lacked sanitization, allowing for HTML injection in administrative reports.
+**Learning:** Multi-step authentication triggered in public contexts should always pivot to Private DMs for sensitive input. Session state must explicitly link the private interaction back to the public context (e.g., via a stored target_chat_id). All user-provided strings used in HTML reports must be escaped to prevent UI manipulation.
+**Prevention:** Enforce Private DM only for password/token entry and use a 'target_chat_id' session variable for remote activation. Use html.escape() for all reporting logic.
