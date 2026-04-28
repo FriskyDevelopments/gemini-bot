@@ -1027,14 +1027,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                target_chat = ticket_data.get(user_id, {}).get("target_chat_id")
                 if update.message.chat.type != "private":
-                    if target_chat is not None and chat_id == str(target_chat):
-                        try:
-                            await update.message.delete()
-                            await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML")
-                        except: pass
-                        return
+                    try:
+                        await update.message.delete()
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML")
+                    except: pass
+                    return
 
                 elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     target_chat = ticket_data.get(user_id, {}).get("target_chat_id", chat_id)

@@ -33,6 +33,7 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         mock_msg = AsyncMock()
         mock_msg.text = "This contains a spamword"
         mock_msg.caption = None
+        mock_msg.new_chat_members = None
         mock_msg.from_user.id = 12345
         mock_msg.from_user.username = "spammer"
 
@@ -46,7 +47,7 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         context.bot.send_message = AsyncMock()
 
         # Mock is_alpha_user to return False
-        with patch('main.is_alpha_user', return_value=AsyncMock(return_value=False)):
+        with patch('main.is_alpha_user', new=AsyncMock(return_value=False)):
             await main.lounge_host(update, context)
 
         # Verify spam report was sent with HTML escaping
@@ -65,6 +66,7 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
 
         mock_msg = AsyncMock()
         mock_msg.text = "secretpassword"
+        mock_msg.new_chat_members = None
         mock_msg.chat.type = "supergroup"
         mock_msg.from_user.id = int(user_id)
 
@@ -97,6 +99,7 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
 
         mock_msg = AsyncMock()
         mock_msg.text = "secretpassword"
+        mock_msg.new_chat_members = None
         mock_msg.chat.type = "private"
         mock_msg.from_user.id = int(user_id)
 
