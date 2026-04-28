@@ -628,11 +628,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     debuggers.add(parts[1])
                     save_state()
                     try:
-                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} added to debuggers list.")
+                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} added to debuggers list.", reply_markup=CLOSE_KEYBOARD)
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                 else:
                     try:
-                         await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>")
+                         await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>", reply_markup=CLOSE_KEYBOARD)
                     except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -643,13 +643,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             authorized_groups = _read_authorized_groups()
             if chat_id in authorized_groups:
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🐶 This group is already authorized!")
+                    await context.bot.send_message(chat_id=chat_id, text="🐶 This group is already authorized!", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             if _authorize_group_local(chat_id):
-                await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             else:
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Failed to save authorization permanently.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         if text_lower == "/admin_assistant":
@@ -754,13 +754,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not is_alpha:
                 return
             if not linked_groups:
-                await context.bot.send_message(chat_id=chat_id, text="No linked groups yet.")
+                await context.bot.send_message(chat_id=chat_id, text="No linked groups yet.", reply_markup=CLOSE_KEYBOARD)
                 return
             groups_text = "\n".join(f"• <code>{gid}</code>" for gid in sorted(linked_groups))
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"🔗 <b>Linked groups ({len(linked_groups)}):</b>\n{groups_text}",
                 parse_mode="HTML",
+                reply_markup=CLOSE_KEYBOARD
             )
             return
 
@@ -777,9 +778,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _deauthorize_group_local(target_chat_id)
             save_state()
             if removed:
-                await context.bot.send_message(chat_id=chat_id, text=f"✅ Unlinked group <code>{target_chat_id}</code>.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"✅ Unlinked group <code>{target_chat_id}</code>.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             else:
-                await context.bot.send_message(chat_id=chat_id, text=f"ℹ️ Group <code>{target_chat_id}</code> was not linked.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"ℹ️ Group <code>{target_chat_id}</code> was not linked.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         # Antigravity developer mode toggle (Private DM Only, unless bypassed)
@@ -873,7 +874,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 logging.error("Invite link generation failed", exc_info=True)
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate invite link.</b> Please ensure the bot has proper administrative permissions.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Failed to generate invite link.</b> Please ensure the bot has proper administrative permissions.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except:
                     pass
             return
@@ -1077,7 +1078,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                          InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
-                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug.", parse_mode="HTML", reply_markup=reply_markup)
+                    await context.bot.send_message(chat_id=chat_id, text=f"👔 Project manually locked to <code>{safe_project}</code>.\n\nNow, please provide a detailed description of the bug (max 2000 chars).", parse_mode="HTML", reply_markup=reply_markup)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "desc":
@@ -1280,14 +1281,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             rules_target_chat = get_primary_target_group()
             if rules_target_chat:
                 try:
-                    rules_caption = "🐾 **Lounge Rules Reminder** 🐾\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n*The Shadow Guardian is watching...*"
+                    rules_caption = "🐾 <b>Lounge Rules Reminder</b> 🐾\n\n1. Stay elite and respectful.\n2. No spamming or prohibited words.\n3. Keep the play safe and consensual.\n\n<i>The Shadow Guardian is watching...</i>"
                     image_path = os.getenv("RULES_IMAGE_PATH", "pupbot.jpg")
                     if os.path.exists(image_path):
                         with open(image_path, 'rb') as f_img:
-                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='Markdown')
+                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='HTML')
                     else:
-                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='Markdown')
-                    await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!")
+                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='HTML')
+                    await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!", reply_markup=CLOSE_KEYBOARD)
                 except Exception:
                     logging.error("Rule reminder broadcast failed", exc_info=True)
                     try:
