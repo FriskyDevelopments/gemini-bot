@@ -566,7 +566,8 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
 
 
 async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.message.from_user: return
+    msg = update.effective_message
+    if not msg or not msg.from_user: return
     
     user_id = str(update.effective_user.id)
     chat_id = str(update.effective_chat.id)
@@ -574,7 +575,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cleanup_expired_link_codes()
     
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
-    if update.message.new_chat_members:
+    if update.message and update.message.new_chat_members:
         inviter = update.message.from_user
         inviter_name = inviter.username or inviter.first_name
         for member in update.message.new_chat_members:
@@ -593,7 +594,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 1.5 DETERMINISTIC TICKETING (JULES)
-    if update.message.text:
+    if update.message and update.message.text:
         text = update.message.text.strip()
         
         # Remove @botusername suffix for commands (e.g. /menu@GeminiPUPBot -> /menu)
@@ -797,13 +798,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             if update.message.chat.type != "private":
                 ticket_states[user_id] = "antigravity_bypass"
+                ticket_data[user_id] = {"target_chat_id": chat_id}
                 save_state()
                 try:
                     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter bypass password to summon Antigravity into this communal chat:</i>",
+                        text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Please send the bypass password to me in a Private DM to summon Antigravity into this communal chat.</i>",
                         parse_mode="HTML",
                         reply_markup=reply_markup
                     )
@@ -1025,21 +1027,34 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             state = ticket_states[user_id]
             if state == "antigravity_bypass":
-                if secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
-                    antigravity_chats.add(chat_id)
-                    if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
+                if update.message.chat.type != "private":
+                    try:
+                        await update.message.delete()
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML")
+                    except: pass
+                    return
+
+                elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
+                    target_chat = ticket_data.get(user_id, {}).get("target_chat_id", chat_id)
+                    antigravity_chats.add(target_chat)
+                    if target_chat in alchemy_chats: alchemy_chats.remove(target_chat)
                     del ticket_states[user_id]
+                    ticket_data.pop(user_id, None)
                     save_state()
                     try:
-                        await context.bot.send_message(chat_id=chat_id, text="⚡ <b>BYPASS ACCEPTED: Antigravity Core ONLINE.</b>\n\nI am now monitoring this communal chat as your AI Developer. Let's start planning.", parse_mode="HTML")
+                        await context.bot.send_message(chat_id=target_chat, text="⚡ <b>BYPASS ACCEPTED: Antigravity Core ONLINE.</b>\n\nI am now monitoring this communal chat as your AI Developer. Let's start planning.", parse_mode="HTML")
+                        if target_chat != chat_id:
+                            await context.bot.send_message(chat_id=chat_id, text="✅ Antigravity activated in the target group.")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
+                    return
                 else:
                     del ticket_states[user_id]
+                    ticket_data.pop(user_id, None)
                     save_state()
                     try:
                         await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML")
                     except Exception as e: logging.debug(f"Ignored error: {e}")
-                return
+                    return
             elif state == "ping_comment_entry":
                 username = update.effective_user.username or str(user_id)
                 url = "https://api.github.com/repos/FriskyDevelopments/gemini-bot/issues"
@@ -1113,22 +1128,33 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     # 2. CHECK FOR SPAMMERS
-    if update.message.text:
-        text_lower = update.message.text.lower()
+    if msg and (msg.text or msg.caption):
+        full_text = (msg.text or "") + (msg.caption or "")
+        text_lower = full_text.lower()
         if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
-            spammer = update.message.from_user
-            spammer_name = spammer.username or spammer.first_name
-            inviter = invitations.get(spammer.id, "Unknown / Join Link")
+            spammer = update.effective_user
+            spammer_name = html.escape(spammer.username or spammer.first_name)
+            inviter = html.escape(invitations.get(str(spammer.id), "Unknown / Join Link"))
+            safe_msg = html.escape(full_text[:500])
             
-            report = f"🚨 **SPAMMER DETECTED**\nMsg: {update.message.text}\n👤 Spammer: {spammer_name}\n🔑 Admitted by: {inviter}"
+            report = (
+                f"🚨 <b>SPAMMER DETECTED</b>\n"
+                f"<b>Msg:</b> {safe_msg}\n"
+                f"👤 <b>Spammer:</b> {spammer_name} (<code>{spammer.id}</code>)\n"
+                f"🔑 <b>Admitted by:</b> {inviter}"
+            )
             
-            logging.info(report)
+            logging.info(f"Spam detected from {spammer.id}: {full_text[:100]}")
             log_id = ADMIN_LOUNGE_ID if ADMIN_LOUNGE_ID else chat_id
             try:
-                await context.bot.send_message(chat_id=log_id, text=report)
-                await update.message.delete()
+                await context.bot.send_message(chat_id=log_id, text=report, parse_mode="HTML")
+                await msg.delete()
             except Exception as e:
                 logging.info(f"Could not send log report or delete message: {e}")
+            return
+
+    if not update.message:
+        return
                 
     # 3. CONVERSATIONAL LOGIC
     # Trigger if alpha/authorized, bot mention, direct reply, or occasional ambient reply.
@@ -1245,7 +1271,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     }
                     
                     # Create Preview Msg
-                    import html
                     preview_lines = reply_text[:3000]
                     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
                     keyboard = [
@@ -1519,7 +1544,7 @@ if __name__ == '__main__':
     
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CallbackQueryHandler(callback_router))
-    app.add_handler(MessageHandler(filters.ALL, lounge_host))
+    app.add_handler(MessageHandler(filters.ALL | filters.UpdateType.EDITED_MESSAGE, lounge_host))
     
     # 🔥 Firebase / Google Cloud Vercel equivalent hosting logic
     port = int(os.environ.get("PORT", 8080))
