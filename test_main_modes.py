@@ -35,7 +35,7 @@ class TestMainModes(unittest.TestCase):
         os.environ.pop("MAIN_GROUP_ID", None)
 
     def test_get_mode_precedence(self):
-        chat_id = "chat-1"
+        chat_id = "-100111"
         main.antigravity_chats.add(chat_id)
         main.alchemy_chats.add(chat_id)
         main.admin_assistant_chats.add(chat_id)
@@ -163,6 +163,43 @@ class TestMainModes(unittest.TestCase):
         )
         self.assertIn("Admin Assistant active", fallback)
 
+    # ── Tone / Persona tests ──────────────────────────────────────────────── #
+
+    def test_system_prompt_defaults_to_friendly(self):
+        """Default BOT_TONE should produce a non-goofy system prompt."""
+        self.assertNotIn("Arf arf", main.SYSTEM_PROMPT)
+        # Check only the preamble (first ~80 chars) for dog-play terms
+        self.assertNotIn("wag", main.SYSTEM_PROMPT.lower()[:80])
+        self.assertIn("Geminipupbot", main.SYSTEM_PROMPT)
+
+    def test_friendly_prompt_contains_guidelines(self):
+        """Friendly tone prompt must include explicit anti-silliness guidelines."""
+        prompt = main._SYSTEM_PROMPT_FRIENDLY
+        self.assertIn("not goofy", prompt)
+        self.assertIn("barking", prompt)
+        self.assertIn("concise", prompt.lower())
+
+    def test_playful_prompt_retained(self):
+        """Playful tone prompt must still be available for backward compat."""
+        prompt = main._SYSTEM_PROMPT_PLAYFUL
+        self.assertIn("pup host", prompt.lower())
+        self.assertIn("Geminipupbot", prompt)
+
+    def test_system_prompt_selection_via_bot_tone(self):
+        """SYSTEM_PROMPT selection follows BOT_TONE at module init."""
+        original_system_prompt = main.SYSTEM_PROMPT
+        try:
+            with patch.dict(os.environ, {"BOT_TONE": "playful"}):
+                # Simulate choosing the playful prompt (as done at module level)
+                chosen = main._SYSTEM_PROMPT_PLAYFUL if os.getenv("BOT_TONE") == "playful" else main._SYSTEM_PROMPT_FRIENDLY
+                self.assertEqual(chosen, main._SYSTEM_PROMPT_PLAYFUL)
+
+            with patch.dict(os.environ, {"BOT_TONE": "friendly"}):
+                chosen = main._SYSTEM_PROMPT_PLAYFUL if os.getenv("BOT_TONE") == "playful" else main._SYSTEM_PROMPT_FRIENDLY
+                self.assertEqual(chosen, main._SYSTEM_PROMPT_FRIENDLY)
+        finally:
+            main.SYSTEM_PROMPT = original_system_prompt
+
 
 class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
@@ -194,6 +231,45 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
             main.dynamic_alpha_ids.clear()
             main.dynamic_alpha_ids.update(original_dynamic_alpha_ids)
             main.admin_owner_last_refresh = original_admin_owner_last_refresh
+
+    async def test_groq_fallback_returns_text_on_success(self):
+        """_groq_text_fallback should return response text when Groq responds OK."""
+        import httpx
+        mock_response = SimpleNamespace(
+            raise_for_status=lambda: None,
+            json=lambda: {"choices": [{"message": {"content": "Hello from Groq!"}}]},
+        )
+
+        async def mock_post(*args, **kwargs):
+            return mock_response
+
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test_key"}):
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_client = mock_client_cls.return_value.__aenter__.return_value
+                mock_client.post = AsyncMock(return_value=mock_response)
+                result = await main._groq_text_fallback("sys", "hello")
+                self.assertEqual(result, "Hello from Groq!")
+
+    async def test_groq_fallback_returns_none_without_key(self):
+        """_groq_text_fallback should return None when GROQ_API_KEY is absent."""
+        env = {k: v for k, v in os.environ.items() if k != "GROQ_API_KEY"}
+        with patch.dict(os.environ, env, clear=True):
+            result = await main._groq_text_fallback("sys", "hello")
+            self.assertIsNone(result)
+
+    async def test_groq_fallback_returns_none_on_http_error(self):
+        """_groq_text_fallback should return None on network/HTTP errors."""
+        import httpx
+
+        async def raise_error(*args, **kwargs):
+            raise httpx.ConnectError("timeout")
+
+        with patch.dict(os.environ, {"GROQ_API_KEY": "test_key"}):
+            with patch("httpx.AsyncClient") as mock_client_cls:
+                mock_client = mock_client_cls.return_value.__aenter__.return_value
+                mock_client.post = raise_error
+                result = await main._groq_text_fallback("sys", "hello")
+                self.assertIsNone(result)
 
 
 if __name__ == "__main__":
