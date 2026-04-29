@@ -630,7 +630,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 invitations[str(member.id)] = inviter_name
                 save_state()
             try:
-                keyboard = [[InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")]]
+                keyboard = [
+                    [InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")],
+                    [CLOSE_BUTTON]
+                ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -754,13 +757,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if chat_id in admin_assistant_chats:
                 admin_assistant_chats.remove(chat_id)
                 save_state()
-                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 return
             admin_assistant_chats.add(chat_id)
             antigravity_chats.discard(chat_id)
             alchemy_chats.discard(chat_id)
             save_state()
-            await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML")
+            await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         if text_lower.startswith("/link_group"):
@@ -888,7 +891,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 antigravity_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🔄 **Antigravity Mode Deactivated.** Returning to Pupbot persona.")
+                    await context.bot.send_message(chat_id=chat_id, text="🔄 <b>Antigravity Mode Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -926,7 +929,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 alchemy_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -947,14 +950,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 relay_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             
             relay_chats.add(chat_id)
             save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -967,7 +970,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             try:
                 invite = await context.bot.create_chat_invite_link(chat_id=target_chat_id, member_limit=1)
-                await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception:
                 logging.error("Invite link generation failed", exc_info=True)
                 try:
@@ -1172,7 +1175,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "project_other":
-                project = re.sub(r'[^a-zA-Z0-9._-]', '', text)
+                project = re.sub(r'[^a-zA-Z0-9._-]', '', text[:100])
                 if not project or project in (".", ".."):
                     try:
                         await context.bot.send_message(chat_id=chat_id, text="⚠️ Invalid project name. Please use alphanumeric, dots, underscores, and dashes only.")
@@ -1219,7 +1222,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_state()
                 try:
                     safe_project = html.escape(project)
-                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the <code>{safe_project}</code> CI/CD pipeline.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the <code>{safe_project}</code> CI/CD pipeline.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
 
@@ -1629,7 +1632,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:",
+            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to (max 100 chars):",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
