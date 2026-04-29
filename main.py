@@ -916,7 +916,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             admin_assistant_chats.discard(chat_id)
             save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -938,7 +938,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             admin_assistant_chats.discard(chat_id)
             save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
             
