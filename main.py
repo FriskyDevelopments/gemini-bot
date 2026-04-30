@@ -1220,10 +1220,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             elif state == "project_other":
-                project = re.sub(r'[^a-zA-Z0-9._-]', '', text)
+                project = re.sub(r'[^a-zA-Z0-9._-]', '', text)[:100]
                 if not project or project in (".", ".."):
                     try:
-                        await context.bot.send_message(chat_id=chat_id, text="⚠️ Invalid project name. Please use alphanumeric, dots, underscores, and dashes only.")
+                        await context.bot.send_message(chat_id=chat_id, text="⚠️ Invalid project name. Please use alphanumeric, dots, underscores, and dashes only (max 100 chars).", reply_markup=CLOSE_KEYBOARD)
                     except: pass
                     return
                 ticket_data[user_id] = {"project": project}
@@ -1886,7 +1886,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to:",
+            "👔 <b>Manual Override</b>\nPlease type the name of the project or repository this bug belongs to (max 100 chars).\n\n<i>Permitted: alphanumeric, dots, underscores, and dashes.</i>",
             parse_mode="HTML",
             reply_markup=reply_markup
         )
