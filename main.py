@@ -172,6 +172,7 @@ invitations = dict(db.get_val("invitations", {}))
 linked_groups = set(db.get_val("linked_groups", []))
 link_codes = dict(db.get_val("link_codes", {}))
 dynamic_alpha_ids = set(db.get_val("dynamic_alpha_ids", []))
+manual_alpha_ids = set(db.get_val("manual_alpha_ids", []))
 relay_drafts = {}
 
 CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
@@ -195,6 +196,7 @@ def save_state():
     db.set_val("linked_groups", list(linked_groups))
     db.set_val("link_codes", link_codes)
     db.set_val("dynamic_alpha_ids", list(dynamic_alpha_ids))
+    db.set_val("manual_alpha_ids", list(manual_alpha_ids))
 
 
 def _safe_chat_id(value):
@@ -383,10 +385,10 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
 
 async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     uid = _safe_chat_id(user_id)
-    if uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids:
+    if uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids:
         return True
     await refresh_dynamic_alpha_ids(context)
-    return uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids
+    return uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids
 
 
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
@@ -653,20 +655,50 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         text_lower = text.lower()
         
-        if text_lower == "/menu" or text_lower == "/help" or text_lower == "/start":
+        if text_lower in ["/start", "/menu", "/help"]:
+            menu_text = (
+                "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
+                "<b>🎭 Personas & Modes</b>\n"
+                "  • <code>/alchemy</code> — Summon the Λlchemy Curator Wizard\n"
+                "  • <code>/antigravity</code> — Summon the Antigravity Developer Core\n\n"
+                "<b>🛠️ System & Debugging</b>\n"
+                "  • <code>/dashboard</code> — Open STIX MΛGIC Deployment Hub\n"
+                "  • <code>/ticket</code> — Open the Jules Bug Reporter\n"
+                "  • <code>/ping</code> — Quick feedback & Help Menu\n\n"
+                "<b>🔐 Alpha / Admin Only</b>\n"
+                "  • <code>/pupsona</code> — PupSona Admin Panel\n"
+                "  • <code>/authorize_group</code> — Allow Pupbot to speak\n"
+                "  • <code>/add_debugger &lt;id&gt;</code> — Grant Reporter access\n"
+                "  • <code>/add_admin &lt;id&gt;</code> — Grant Alpha Admin rights\n\n"
+                "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>\n\n"
+                "Select a command from the boxes below to interact with my systems!"
+            )
+            
+            keyboard = [
+                [
+                    InlineKeyboardButton("🪄 /alchemy", callback_data="cmd:alchemy"),
+                    InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
+                ],
+                [
+                    InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard"),
+                    InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket")
+                ],
+                [
+                    InlineKeyboardButton("📡 /ping", callback_data="cmd:ping")
+                ],
+                [
+                    InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
+                    InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
             try:
-                active_menu = MENU_TEXT
-                effective_mode = get_effective_mode(chat_id)
-                if effective_mode == "antigravity":
-                    active_menu = ANTIGRAVITY_MENU_TEXT
-                elif effective_mode == "alchemy":
-                    active_menu = ALCHEMY_MENU_TEXT
-                elif effective_mode == "admin_assistant":
-                    active_menu = ADMIN_ASSISTANT_MENU_TEXT
-                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=menu_text, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
                 logging.error(f"Menu formatting crash: {e}")
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ <b>System Error:</b> Could not render the menu. Please try again later.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: {e}")
             return
 
         # Command to add debuggers
@@ -682,6 +714,22 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     try:
                          await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+            return
+            
+        # Command to add admins / super users manually
+        if text_lower.startswith("/add_admin"):
+            if is_alpha:
+                parts = text.split()
+                if len(parts) > 1:
+                    manual_alpha_ids.add(parts[1])
+                    save_state()
+                    try:
+                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} has been granted Alpha Admin rights.", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                else:
+                    try:
+                         await context.bot.send_message(chat_id=chat_id, text="Usage: /add_admin <user_id>", reply_markup=CLOSE_KEYBOARD)
                     except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -1444,6 +1492,215 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "close_message":
         await query.answer()
         await query.delete_message()
+        return
+
+    if query.data in ["cmd:dashboard", "cmd:dashmode"]:
+        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        active_persona = "🧙 Λlchemy Curator" if chat_id in alchemy_chats else "🐾 Pupbot (Default)"
+        raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
+        auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
+        deploy_url = "https://security.stixmagic.com"
+        if query.message.chat.type == "private":
+            hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", web_app=WebAppInfo(url=deploy_url))
+        else:
+            hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", url=deploy_url)
+        keyboard = [
+            [hub_btn],
+            [InlineKeyboardButton("🪄 Arcanum Portal", url="https://arcanum.stixmagic.com"),
+             InlineKeyboardButton("📦 Emoji Pack", url="https://t.me/addemoji/arcanum_magic_emojis_v3_by_stixsignal_bot")],
+            [InlineKeyboardButton("🔮 /dashmode", callback_data="cmd:dashmode"),
+             InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
+            [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
+             InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
+            [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        try:
+            antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
+            alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
+            dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
+                    "──────────────────────\n"
+                    f"  PERSONA       {active_persona}\n"
+                    f"  BUILD         v137 · Apr 2026\n"
+                    f"  ALPHA         <code>{ALPHA}</code>\n"
+                    "──────────────────────\n"
+                    "<b>MODES</b>\n"
+                    f"  ANTIGRAVITY   {antigravity_mode}\n"
+                    f"  ALCHEMY       {alchemy_mode}\n"
+                    f"  DASHBOARD     {dashboard_mode}\n"
+                    "──────────────────────\n"
+                    "<b>REGISTRY</b>\n"
+                    f"  AUTH GROUPS   {len(auth_groups)}\n"
+                    f"  DEBUGGERS     {len(debuggers)}\n"
+                    "──────────────────────\n"
+                    "<i>⚡ All systems nominal.</i>"
+                ),
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+        except Exception as e: logging.error(f"Send error: {e}")
+        return
+
+    if query.data == "cmd:alchemy":
+        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        if chat_id in alchemy_chats:
+            alchemy_chats.remove(chat_id)
+            save_state()
+            await query.answer("🪄 Λlchemy Curator Deactivated.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e: logging.error(f"Send error: {e}")
+        else:
+            alchemy_chats.add(chat_id)
+            save_state()
+            await query.answer("🪄 Λlchemy Curator ONLINE.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator ONLINE.</b>\nThe Cauldron is bubbling. Let's brew some viral magic.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e: logging.error(f"Send error: {e}")
+        return
+
+    if query.data == "cmd:pupsona":
+        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        
+        active_persona = "🧙 Λlchemy Curator" if chat_id in alchemy_chats else "🐾 Pupbot (Default)"
+        raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
+        auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
+        
+        keyboard = [
+            [InlineKeyboardButton("🎛️ Dashboard", callback_data="cmd:dashboard")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        try:
+            antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
+            alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
+            dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
+                    "──────────────────────\n"
+                    f"  PERSONA       {active_persona}\n"
+                    f"  BUILD         v137 · Apr 2026\n"
+                    f"  ALPHA         <code>{ALPHA}</code>\n"
+                    "──────────────────────\n"
+                    "<b>MODES</b>\n"
+                    f"  ANTIGRAVITY   {antigravity_mode}\n"
+                    f"  ALCHEMY       {alchemy_mode}\n"
+                    f"  DASHBOARD     {dashboard_mode}\n"
+                    "──────────────────────\n"
+                    "<b>REGISTRY</b>\n"
+                    f"  AUTH GROUPS   {len(auth_groups)}\n"
+                    f"  DEBUGGERS     {len(debuggers)}\n"
+                    "──────────────────────\n"
+                    "<i>⚡ All systems nominal.</i>"
+                ),
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+        except Exception as e: logging.error(f"Send error: {e}")
+        return
+
+    if query.data == "cmd:authorize_group":
+        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        
+        raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
+        authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
+        
+        if chat_id in authorized_groups:
+            await query.answer("🐶 This group is already authorized!", show_alert=True)
+            return
+            
+        new_groups = authorized_groups + [chat_id]
+        new_list_str = ",".join(new_groups)
+        env_path = os.path.join(os.path.dirname(__file__), ".env")
+        doppler_cli = "/opt/homebrew/bin/doppler" if os.path.exists("/opt/homebrew/bin/doppler") else "doppler"
+        doppler_project = "geminipup"
+        
+        try:
+            subprocess.run([doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", doppler_project, "-c", "dev"], check=True)
+            await query.answer("✅ GROUP AUTHORIZED!", show_alert=True)
+            await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+        except Exception as e:
+            try:
+                with open(env_path, "a") as f:
+                    f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
+                await query.answer("✅ GROUP AUTHORIZED (Local)", show_alert=True)
+                await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!\n<i>(Local fallback saved)</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e2:
+                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Added to memory, but failed to save permanently: `{e2}`")
+        return
+
+    if query.data == "cmd:antigravity":
+        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        if chat_id in antigravity_chats:
+            antigravity_chats.remove(chat_id)
+            save_state()
+            await query.answer("🔄 Antigravity Mode Deactivated.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="🔄 <b>Antigravity Mode Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e: logging.error(f"Send error: {e}")
+        else:
+            if query.message.chat.type != "private":
+                ticket_states[user_id] = "antigravity_bypass"
+                save_state()
+                await query.answer()
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter Emoji Spring to summon Antigravity into this communal chat:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                except Exception as e: logging.error(f"Send error: {e}")
+            else:
+                antigravity_chats.add(chat_id)
+                save_state()
+                await query.answer("⚡ Antigravity Interface ONLINE.")
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                except Exception as e: logging.error(f"Send error: {e}")
+        return
+
+    if query.data == "cmd:ping":
+        ticket_states[user_id] = "ping_comment_entry"
+        save_state()
+        await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
+            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
+            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+            [CLOSE_BUTTON]
+        ]
+        await context.bot.send_message(chat_id=chat_id, text="✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    if query.data == "cmd:ticket":
+        ticket_states[user_id] = "project"
+        ticket_data.pop(user_id, None)
+        save_state()
+        await query.answer()
+        keyboard = [
+            [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
+             InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
+            [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
+             InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+        ]
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
 
     if query.data.startswith("relay_"):
