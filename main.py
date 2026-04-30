@@ -42,27 +42,19 @@ ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
 
-_SYSTEM_PROMPT_FRIENDLY = """You are Geminipupbot, the warm and engaging host of the 'Pup Lounge'.
-Your role is to keep conversation flowing, welcome members, and be genuinely helpful.
+_SYSTEM_PROMPT_BADASS = """You are Geminipupbot, the fierce, unapologetic, and badass host of the 'Haus of Howl'.
+This is an elite environment where only the strong survive. You do not take disrespect, and you speak with confidence, edge, and a hint of dark sass.
+Your primary goal is to command the room. Call out bad takes, be sharply witty, and don't coddle anyone.
+Use edgy, commanding terminology. You are the Alpha's enforcer.
+If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, rule the Haus of Howl!"""
 
-Guidelines:
-• Be friendly and approachable — not goofy or excessively playful.
-• Avoid barking, woofing, whimpering, or overusing dog-play terminology unless a user explicitly requests it.
-• Do not overuse emojis; use them sparingly and purposefully.
-• Do not use childish or nonsensical phrasing.
-• Be concise — keep responses focused and helpful.
-• Help members feel welcome and engaged without derailing into roleplay.
-• Never mirror the exact input back to the user; always advance the conversation.
-
-If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a great lounge host!"""
-
-_SYSTEM_PROMPT_PLAYFUL = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Pup Lounge'!
+_SYSTEM_PROMPT_PLAYFUL = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Haus of Howl'!
 This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle.
 Your primary goal is to ENERGIZE the room, keep the party highly interactive, and make the lounge engaging!
 Act as the ultimate MC/Party Host: ask playful icebreaker questions, hype up the members, use pup-play terminology naturally (barks, tail wags, whimpers, treats, ear scratches), and start fun conversations!
 If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a legendary pup host!"""
 
-SYSTEM_PROMPT = _SYSTEM_PROMPT_FRIENDLY if BOT_TONE != "playful" else _SYSTEM_PROMPT_PLAYFUL
+SYSTEM_PROMPT = _SYSTEM_PROMPT_BADASS if BOT_TONE != "playful" else _SYSTEM_PROMPT_PLAYFUL
 
 ANTIGRAVITY_PROMPT = """You are Antigravity, an elite AI developer and infrastructure engineer at Google Deepmind.
 You are speaking strictly in a private, encrypted channel with your human counterpart (Frisky).
@@ -173,6 +165,7 @@ linked_groups = set(db.get_val("linked_groups", []))
 link_codes = dict(db.get_val("link_codes", {}))
 dynamic_alpha_ids = set(db.get_val("dynamic_alpha_ids", []))
 manual_alpha_ids = set(db.get_val("manual_alpha_ids", []))
+sleep_mode = db.get_val("sleep_mode", False)
 relay_drafts = {}
 
 CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
@@ -197,6 +190,7 @@ def save_state():
     db.set_val("link_codes", link_codes)
     db.set_val("dynamic_alpha_ids", list(dynamic_alpha_ids))
     db.set_val("manual_alpha_ids", list(manual_alpha_ids))
+    db.set_val("sleep_mode", sleep_mode)
 
 
 def _safe_chat_id(value):
@@ -636,7 +630,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"👋 Welcome to the Pup Lounge, {html.escape(member.first_name)}! I'm Pupbot, your host. Feel free to introduce yourself and dive into the conversation! Tap <b>Open Menu</b> to see available commands. 🐾",
+                    text=f"👋 Welcome to the Haus of Howl, {html.escape(member.first_name)}! I'm your host. Tap <b>Open Menu</b> to see available commands.",
                     parse_mode="HTML",
                     reply_markup=reply_markup
                 )
@@ -1015,7 +1009,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             try:
                 invite = await context.bot.create_chat_invite_link(chat_id=target_chat_id, member_limit=1)
-                await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Pup Lounge Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"🎟️ <b>Exclusive Haus of Howl Link:</b>\n{invite.invite_link}\n<i>(Valid for 1 use!)</i>", parse_mode="HTML")
             except Exception:
                 logging.error("Invite link generation failed", exc_info=True)
                 try:
@@ -1301,14 +1295,22 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
                 
     # 3. CONVERSATIONAL LOGIC
-    # Trigger if alpha/authorized, bot mention, direct reply, or occasional ambient reply.
     text_lower = (update.message.text or update.message.caption or "").lower()
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
-    in_auth_group = chat_id in _read_authorized_groups() or chat_id in linked_groups
+    is_private = update.message.chat.type == "private"
     has_text_or_photo = bool(update.message.text or update.message.photo)
     
-    if (is_alpha or in_auth_group or is_reply_to_bot or bot_mentioned or random.random() < 0.05) and has_text_or_photo:
+    should_reply = False
+    if is_private:
+        should_reply = True
+    elif bot_mentioned or is_reply_to_bot:
+        should_reply = True
+        
+    if sleep_mode and not is_alpha:
+        should_reply = False
+        
+    if should_reply and has_text_or_photo:
         user_text = update.message.text or update.message.caption or ""
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
@@ -1821,6 +1823,28 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
             reply_markup=reply_markup
         )
+        return
+
+    if query.data == "manage_auth":
+        raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
+        auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
+        group_list = "\n".join([f"• `{g}`" for g in auth_groups]) if auth_groups else "None"
+        await query.answer()
+        await query.edit_message_text(f"⚙️ <b>Authorized Groups</b>\n\n{group_list}\n\n<i>(Use /authorize_group in a chat to add it, or remove from Doppler to revoke)</i>", parse_mode="HTML")
+        return
+
+    if query.data == "manage_debug":
+        debug_list = "\n".join([f"• `{d}`" for d in debuggers]) if debuggers else "None"
+        await query.answer()
+        await query.edit_message_text(f"👨‍💻 <b>Authorized Debuggers</b>\n\n{debug_list}\n\n<i>(Use /add_debugger <id> to add more)</i>", parse_mode="HTML")
+        return
+
+    if query.data == "toggle_sleep":
+        global sleep_mode
+        sleep_mode = not sleep_mode
+        save_state()
+        status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
+        await query.answer(f"Sleep Mode is now {status}", show_alert=True)
         return
 
     if query.data == "ping_bot_dead":
