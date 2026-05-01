@@ -1436,7 +1436,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # Create Preview Msg
                     preview_lines = reply_text[:3000]
-                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
                     keyboard = [
                         [InlineKeyboardButton("🚀 Send", callback_data=f"relay_send:{draft_id}"),
                          InlineKeyboardButton("🔄 Retry", callback_data=f"relay_retry:{draft_id}")],
@@ -1739,7 +1738,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             import google.generativeai as genai
             gemini_key = os.getenv("GEMINI_API_KEY")
             genai.configure(api_key=gemini_key)
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
             import html
             
             # Need to get system instruction from main chat
