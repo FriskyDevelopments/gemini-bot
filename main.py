@@ -167,6 +167,7 @@ dynamic_alpha_ids = set(db.get_val("dynamic_alpha_ids", []))
 manual_alpha_ids = set(db.get_val("manual_alpha_ids", []))
 sleep_mode = db.get_val("sleep_mode", False)
 relay_drafts = {}
+conversation_histories = {}
 
 CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
 LINK_CODE_TTL_SECONDS = int(os.getenv("LINK_CODE_TTL_SECONDS", "900"))
@@ -1375,10 +1376,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
             else:
                 relationship = "Your ALPHA (Owner)" if is_alpha else "A lounge member"
+                
+                # Fetch history
+                history = conversation_histories.get(chat_id, [])
+                history_text = "\n".join(history[-10:]) if history else "No previous context."
+                
                 prompt = (
                     f"{SYSTEM_PROMPT}\n"
                     f"You are currently talking to: {user_name} ({relationship}).\n"
                     "Never mirror the exact input; always advance the conversation.\n"
+                    f"--- CONVERSATION HISTORY ---\n{history_text}\n"
+                    f"--- LATEST MESSAGE ---\n"
                     f"User: {user_text}"
                 )
             
@@ -1453,6 +1461,14 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logging.error(f"Failed to send draft preview: {e}")
                 else:
                     await push_processed_response(context, chat_id, chat_id, reply_text, user_name, update.message.message_id)
+                    
+                # Save to history for conversational continuity
+                if chat_id not in conversation_histories:
+                    conversation_histories[chat_id] = []
+                conversation_histories[chat_id].append(f"{user_name}: {user_text}")
+                conversation_histories[chat_id].append(f"Pupbot: {reply_text}")
+                # Prune to last 15 messages
+                conversation_histories[chat_id] = conversation_histories[chat_id][-15:]
 
         except Exception as e:
             logging.error(f"AI Engine Fault: {e}", exc_info=True)
