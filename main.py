@@ -627,7 +627,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 invitations[str(member.id)] = inviter_name
                 save_state()
             try:
-                keyboard = [[InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")]]
+                keyboard = [
+                    [InlineKeyboardButton("📖 Open Menu", callback_data="show_menu")],
+                    [CLOSE_BUTTON]
+                ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -684,7 +687,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [
                     InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
                     InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
-                ]
+                ],
+                [CLOSE_BUTTON]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
@@ -732,7 +736,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_lower.startswith("/pupsona"):
             if not is_alpha:
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ Only admins can view or change the persona settings.")
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ Only admins can view or change the persona settings.", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
             parts = text.split(maxsplit=1)
@@ -797,13 +801,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if chat_id in admin_assistant_chats:
                 admin_assistant_chats.remove(chat_id)
                 save_state()
-                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 return
             admin_assistant_chats.add(chat_id)
             antigravity_chats.discard(chat_id)
             alchemy_chats.discard(chat_id)
             save_state()
-            await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML")
+            await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             return
 
         if text_lower.startswith("/link_group"):
@@ -931,7 +935,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 antigravity_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🔄 **Antigravity Mode Deactivated.** Returning to Pupbot persona.")
+                    await context.bot.send_message(chat_id=chat_id, text="🔄 **Antigravity Mode Deactivated.** Returning to Pupbot persona.", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -956,7 +960,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             admin_assistant_chats.discard(chat_id)
             save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -969,7 +973,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 alchemy_chats.remove(chat_id)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -978,7 +982,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             admin_assistant_chats.discard(chat_id)
             save_state()
             try:
-                await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text="✨ <b>Λlchemy Curator Wizard ONLINE.</b>\nI have donned the Wizard Hat. What STIX MΛGIC features shall we conjure?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e: logging.debug(f"Ignored error: {e}")
             return
             
@@ -1044,7 +1048,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.debug(f"Ignored error: {e}")
             else:
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ Access Denied. You must be an authorized debugger.")
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ Access Denied. You must be an authorized debugger.", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
             return
 
@@ -1148,7 +1152,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 logging.error("Promo generation failed", exc_info=True)
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> An internal error occurred during generation.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text="❌ <b>Promo Error:</b> An internal error occurred during generation.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except:
                     pass
             return
@@ -1191,7 +1195,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ticket_data.pop(user_id, None)
                     save_state()
                     try:
-                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML")
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Access Denied.</b> Incorrect bypass password. Returning to standard operations. <i>(Tip: Type /antigravity to try again)</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                     except Exception as e: logging.debug(f"Ignored error: {e}")
                     return
             elif state == "ping_comment_entry":
@@ -1262,7 +1266,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_state()
                 try:
                     safe_project = html.escape(project)
-                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the <code>{safe_project}</code> CI/CD pipeline.", parse_mode="HTML")
+                    await context.bot.send_message(chat_id=chat_id, text=f"✅ <b>Ticket Submitted!</b> Antigravity has received your report and injected it into the <code>{safe_project}</code> CI/CD pipeline.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
 
@@ -1488,9 +1492,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     image_path = os.getenv("RULES_IMAGE_PATH", "pupbot.jpg")
                     if os.path.exists(image_path):
                         with open(image_path, 'rb') as f_img:
-                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='HTML')
+                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='HTML', reply_markup=CLOSE_KEYBOARD)
                     else:
-                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='HTML')
+                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='HTML', reply_markup=CLOSE_KEYBOARD)
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!", reply_markup=CLOSE_KEYBOARD)
                 except Exception:
                     logging.error("Rule reminder broadcast failed", exc_info=True)
