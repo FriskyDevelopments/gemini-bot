@@ -1518,7 +1518,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_persona = "🧙 Λlchemy Curator" if chat_id in alchemy_chats else "🐾 Pupbot (Default)"
         raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
         auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
-        deploy_url = "https://security.friskydev.com"
+        deploy_url = "https://security.stixmagic.com"
         if query.message.chat.type == "private":
             hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", web_app=WebAppInfo(url=deploy_url))
         else:
