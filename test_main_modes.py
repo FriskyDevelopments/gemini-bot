@@ -202,6 +202,38 @@ class TestMainModes(unittest.TestCase):
 
 
 class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
+    async def test_rules_reminder_broadcast_has_no_close_button(self):
+        message = SimpleNamespace(
+            text="Please remind the group of the rules",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="supergroup"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id=-100),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                id=456,
+                username="PupBot",
+                send_message=AsyncMock(),
+            )
+        )
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
+             patch("main.get_primary_target_group", return_value="-200"), \
+             patch("main.os.path.exists", return_value=False):
+            await main.lounge_host(update, context)
+
+        broadcast_call = context.bot.send_message.call_args_list[0]
+        self.assertEqual(broadcast_call.kwargs["chat_id"], "-200")
+        self.assertNotIn("reply_markup", broadcast_call.kwargs)
+
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
         original_dynamic_alpha_ids = set(main.dynamic_alpha_ids)

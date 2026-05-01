@@ -1492,9 +1492,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     image_path = os.getenv("RULES_IMAGE_PATH", "pupbot.jpg")
                     if os.path.exists(image_path):
                         with open(image_path, 'rb') as f_img:
-                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='HTML', reply_markup=CLOSE_KEYBOARD)
+                            await context.bot.send_photo(chat_id=rules_target_chat, photo=f_img, caption=rules_caption, parse_mode='HTML')
                     else:
-                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='HTML', reply_markup=CLOSE_KEYBOARD)
+                        await context.bot.send_message(chat_id=rules_target_chat, text=rules_caption, parse_mode='HTML')
                     await context.bot.send_message(chat_id=chat_id, text="✅ Rules reminder sent to the main lounge!", reply_markup=CLOSE_KEYBOARD)
                 except Exception:
                     logging.error("Rule reminder broadcast failed", exc_info=True)
