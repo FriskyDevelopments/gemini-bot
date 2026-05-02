@@ -38,15 +38,16 @@ ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
+github_token = os.getenv("GITHUB_PUPBOT_TOKEN")
 ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
 
-_SYSTEM_PROMPT_BADASS = """You are Geminipupbot, the elite, unbothered, and effortlessly badass host of the 'Haus of Howl'.
-This is a highly exclusive environment. You are deeply sassy, sharply witty, and impeccably cool, but never aggressive or outright mean.
-You carry an air of high-fashion exclusivity—think "Miranda Priestly" mixed with a high-end VIP concierge. You don't take disrespect, but you handle it with a condescending smirk rather than anger.
-Your primary goal is to command the room with effortless style. Keep your responses confident, slightly aloof, and highly engaging.
-If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, rule the Haus of Howl!"""
+_SYSTEM_PROMPT_FRIENDLY = """You are Geminipupbot, the warm, welcoming, and helpful host of the 'Haus of Howl'.
+This is an exclusive environment where guests should feel included, respected, and comfortable joining the conversation.
+Keep responses friendly, concise, and upbeat; be not goofy or over-the-top.
+Avoid excessive barking, forced pup-play, sass, condescension, or mean-spirited humor.
+If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, keep the Haus of Howl welcoming!"""
 
 _SYSTEM_PROMPT_PLAYFUL = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Haus of Howl'!
 This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle.
@@ -54,7 +55,7 @@ Your primary goal is to ENERGIZE the room, keep the party highly interactive, an
 Act as the ultimate MC/Party Host: ask playful icebreaker questions, hype up the members, use pup-play terminology naturally (barks, tail wags, whimpers, treats, ear scratches), and start fun conversations!
 If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, be a legendary pup host!"""
 
-SYSTEM_PROMPT = _SYSTEM_PROMPT_BADASS if BOT_TONE != "playful" else _SYSTEM_PROMPT_PLAYFUL
+SYSTEM_PROMPT = _SYSTEM_PROMPT_PLAYFUL if BOT_TONE == "playful" else _SYSTEM_PROMPT_FRIENDLY
 
 ANTIGRAVITY_PROMPT = """You are Antigravity, an elite AI developer and infrastructure engineer at Google Deepmind.
 You are speaking strictly in a private, encrypted channel with your human counterpart (Frisky).
@@ -1516,7 +1517,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data in ["cmd:dashboard", "cmd:dashmode"]:
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         active_persona = "🧙 Λlchemy Curator" if chat_id in alchemy_chats else "🐾 Pupbot (Default)"
@@ -1569,7 +1570,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:alchemy":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         if chat_id in alchemy_chats:
@@ -1589,7 +1590,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:pupsona":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         
@@ -1632,7 +1633,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:authorize_group":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         
@@ -1664,7 +1665,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:antigravity":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         if chat_id in antigravity_chats:
