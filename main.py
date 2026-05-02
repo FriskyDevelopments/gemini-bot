@@ -697,8 +697,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
                     await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=menu_text, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
-                logging.error(f"Menu formatting crash: {e}")
-                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ The color boxes broke Telegram! Error: {e}")
+                logging.error("Menu formatting crash", exc_info=True)
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ The color boxes broke Telegram! An internal error occurred.")
             return
 
         # Command to add debuggers
@@ -1126,7 +1126,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await loop.run_in_executor(None, lambda: client.create_tweet(text=promo_data.get('twitter_promo')))
                     twitter_status = "✅ Dispatched to Twitter."
                 except Exception as e:
-                    twitter_status = f"⚠️ Twitter skipped/failed: {e}"
+                    logging.error("Twitter dispatch failed", exc_info=True)
+                    twitter_status = "⚠️ Twitter dispatch failed."
 
                 # 4. The Free-User DM Matrix
                 dm_status = "⚠️ Supabase matrix skipped (SDK missing)."
@@ -1147,7 +1148,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             except Exception: pass
                         dm_status = f"✅ DMed {dm_count} Free-Tier users."
                 except Exception as e:
-                    dm_status = f"⚠️ DM matrix failed: {e}"
+                    logging.error("DM matrix failed", exc_info=True)
+                    dm_status = "⚠️ DM matrix dispatch failed."
 
                 await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
             except Exception:
@@ -1476,8 +1478,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 conversation_histories[chat_id] = conversation_histories[chat_id][-15:]
 
         except Exception as e:
-            logging.error(f"AI Engine Fault: {e}", exc_info=True)
-            error_msg = "❌ <b>AI Engine Fault:</b> The AI model encountered an error."
+            logging.error("AI Engine Fault", exc_info=True)
+            error_msg = "❌ <b>AI Engine Fault:</b> The AI model encountered an internal error."
             try:
                 await context.bot.send_message(chat_id=chat_id, text=error_msg, parse_mode="HTML")
             except: pass
@@ -1661,7 +1663,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer("✅ GROUP AUTHORIZED (Local)", show_alert=True)
                 await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!\n<i>(Local fallback saved)</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception as e2:
-                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Added to memory, but failed to save permanently: `{e2}`")
+                logging.error("Failed to save authorized group permanently", exc_info=True)
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ Added to memory, but failed to save permanently.")
         return
 
     if query.data == "cmd:antigravity":

@@ -34,3 +34,8 @@
 **Vulnerability:** Interactive authentication flows (like the antigravity bypass) permitted password entry in communal group chats, leading to credential leakage. Additionally, the spam detector lacked sanitization, allowing for HTML injection in administrative reports.
 **Learning:** Multi-step authentication triggered in public contexts should always pivot to Private DMs for sensitive input. Session state must explicitly link the private interaction back to the public context (e.g., via a stored target_chat_id). All user-provided strings used in HTML reports must be escaped to prevent UI manipulation.
 **Prevention:** Enforce Private DM only for password/token entry and use a 'target_chat_id' session variable for remote activation. Use html.escape() for all reporting logic.
+
+## 2026-05-01 - Consistent Information Leakage Hardening
+**Vulnerability:** Raw exception details were still being leaked in multiple handlers (UI, promo status, fallback persistence, and AI engine) despite previous fixes.
+**Learning:** Hardening against information leakage must be exhaustive. Status reports (like promo success/failure) often escape standard error handling and can inadvertently expose backend failures to end-users.
+**Prevention:** Audit all 'except' blocks for 'f-string' interpolation of exceptions in 'send_message' calls. Standardize on generic "Internal error" messages for users while using 'logging.error(..., exc_info=True)' for full context in logs.
