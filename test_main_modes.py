@@ -271,6 +271,42 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
                 result = await main._groq_text_fallback("sys", "hello")
                 self.assertIsNone(result)
 
+    async def test_ping_comment_entry_posts_to_github_when_typing_action_fails(self):
+        """A typing indicator failure must not block GitHub feedback submission."""
+        user_id = str(main.ALPHA)
+        chat_id = "-100123"
+        main.ticket_states[user_id] = "ping_comment_entry"
+        message = SimpleNamespace(
+            text="Please review this logic",
+            from_user=SimpleNamespace(id=int(user_id), username="tester", first_name="Test"),
+            chat=SimpleNamespace(type="private"),
+            new_chat_members=None,
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            message=message,
+            effective_user=message.from_user,
+            effective_chat=SimpleNamespace(id=chat_id),
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_chat_action=AsyncMock(side_effect=Exception("typing failed")),
+                send_message=AsyncMock(),
+            )
+        )
+
+        try:
+            with patch("main.github_token", "token", create=True), patch("main.save_state", return_value=None):
+                with patch("httpx.AsyncClient") as mock_client_cls:
+                    mock_client = mock_client_cls.return_value.__aenter__.return_value
+                    mock_client.post = AsyncMock()
+
+                    await main.lounge_host(update, context)
+
+                    mock_client.post.assert_awaited_once()
+        finally:
+            main.ticket_states.pop(user_id, None)
+
 
 if __name__ == "__main__":
     unittest.main()

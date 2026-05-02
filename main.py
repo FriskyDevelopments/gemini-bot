@@ -1202,8 +1202,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     headers = {"Authorization": f"Bearer {github_token}", "Accept": "application/vnd.github.v3+json"}
                     data = {"title": f"Logic Comment from @{username}", "body": comment_text, "labels": ["feedback", "pupbot-routed"]}
                     try:
-                        import httpx
                         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                    try:
+                        import httpx
                         async with httpx.AsyncClient(timeout=10) as client:
                             await client.post(url, headers=headers, json=data)
                     except Exception as e:
