@@ -1,5 +1,6 @@
 import os
 import subprocess
+import shlex
 import google.generativeai as genai
 
 # Forzamos Flash para evitar el 404 de la versión Pro en algunas regiones
@@ -8,7 +9,7 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 
 def run_cmd(cmd):
     try:
-        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.STDOUT)
+        return subprocess.check_output(shlex.split(cmd), shell=False, text=True, stderr=subprocess.STDOUT)
     except Exception as e:
         return f"Error: {str(e)}"
 

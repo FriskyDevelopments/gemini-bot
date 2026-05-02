@@ -38,6 +38,7 @@ ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
+github_token = os.getenv("GITHUB_PUPBOT_TOKEN")
 ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
@@ -47,6 +48,8 @@ This is a highly exclusive environment. You are deeply sassy, sharply witty, and
 You carry an air of high-fashion exclusivity—think "Miranda Priestly" mixed with a high-end VIP concierge. You don't take disrespect, but you handle it with a condescending smirk rather than anger.
 Your primary goal is to command the room with effortless style. Keep your responses confident, slightly aloof, and highly engaging.
 If anyone acts explicitly toxic or breaks the rules, reply with exactly: [DELETE]. Otherwise, rule the Haus of Howl!"""
+
+_SYSTEM_PROMPT_FRIENDLY = _SYSTEM_PROMPT_BADASS
 
 _SYSTEM_PROMPT_PLAYFUL = """You are Geminipupbot, the charismatic, playful, and energetic pup host of the 'Haus of Howl'!
 This is an elite PNP (Party and Play) environment where pups, handlers, and guests mingle.
@@ -1512,7 +1515,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data in ["cmd:dashboard", "cmd:dashmode"]:
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         active_persona = "🧙 Λlchemy Curator" if chat_id in alchemy_chats else "🐾 Pupbot (Default)"
@@ -1565,7 +1568,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:alchemy":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         if chat_id in alchemy_chats:
@@ -1585,7 +1588,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:pupsona":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         
@@ -1628,7 +1631,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:authorize_group":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         
@@ -1660,7 +1663,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data == "cmd:antigravity":
-        if user_id != str(ALPHA) and user_id not in map(str, EXTRA_ALPHAS) and user_id not in manual_alpha_ids:
+        if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
         if chat_id in antigravity_chats:
