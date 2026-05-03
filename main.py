@@ -676,6 +676,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
                     await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
             except Exception as e:
+                logging.error("Menu formatting crash", exc_info=True)
                 await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
             return
 

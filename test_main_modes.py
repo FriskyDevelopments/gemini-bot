@@ -3,6 +3,7 @@ import os
 from types import SimpleNamespace
 from unittest.mock import patch
 from unittest.mock import AsyncMock
+from unittest.mock import mock_open
 
 import main
 
@@ -233,6 +234,36 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         broadcast_call = context.bot.send_message.call_args_list[0]
         self.assertEqual(broadcast_call.kwargs["chat_id"], "-200")
         self.assertNotIn("reply_markup", broadcast_call.kwargs)
+
+    async def test_menu_animation_fallback_logs_exception(self):
+        message = SimpleNamespace(
+            text="/menu",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="supergroup"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id=-100),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_animation=AsyncMock(side_effect=RuntimeError("send failed")),
+                send_message=AsyncMock(),
+            )
+        )
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("builtins.open", mock_open(read_data=b"gif")), \
+             patch("main.logging.error") as mock_logging_error:
+            await main.lounge_host(update, context)
+
+        mock_logging_error.assert_called_once_with("Menu formatting crash", exc_info=True)
+        context.bot.send_message.assert_awaited_once()
 
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
