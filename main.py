@@ -1877,7 +1877,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="cmd:dashboard"), CLOSE_BUTTON]]
         await query.edit_message_text(
-            f"👨‍💻 <b>Authorized Debuggers</b>\n\n{debug_list}\n\n<i>(Use /add_debugger <id> to add more)</i>",
+            f"👨‍💻 <b>Authorized Debuggers</b>\n\n{debug_list}\n\n<i>(Use /add_debugger &lt;id&gt; to add more)</i>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
