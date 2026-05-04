@@ -1538,15 +1538,16 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
-            [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")]
+            [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")],
+            [CLOSE_BUTTON]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.answer()
         try:
             antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
             alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
             dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
-            await context.bot.send_message(
-                chat_id=chat_id,
+            await query.edit_message_text(
                 text=(
                     "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
                     "──────────────────────\n"
@@ -1568,7 +1569,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML",
                 reply_markup=reply_markup
             )
-        except Exception as e: logging.error(f"Send error: {e}")
+        except Exception as e: logging.error(f"Dashboard update error: {e}")
         return
 
     if query.data == "cmd:alchemy":
@@ -1850,15 +1851,25 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "manage_auth":
         raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
         auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
-        group_list = "\n".join([f"• `{g}`" for g in auth_groups]) if auth_groups else "None"
+        group_list = "\n".join([f"• <code>{html.escape(g)}</code>" for g in auth_groups]) if auth_groups else "None"
         await query.answer()
-        await query.edit_message_text(f"⚙️ <b>Authorized Groups</b>\n\n{group_list}\n\n<i>(Use /authorize_group in a chat to add it, or remove from Doppler to revoke)</i>", parse_mode="HTML")
+        keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="cmd:dashboard"), CLOSE_BUTTON]]
+        await query.edit_message_text(
+            f"⚙️ <b>Authorized Groups</b>\n\n{group_list}\n\n<i>(Use /authorize_group in a chat to add it, or remove from Doppler to revoke)</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
 
     if query.data == "manage_debug":
-        debug_list = "\n".join([f"• `{d}`" for d in debuggers]) if debuggers else "None"
+        debug_list = "\n".join([f"• <code>{html.escape(str(d))}</code>" for d in debuggers]) if debuggers else "None"
         await query.answer()
-        await query.edit_message_text(f"👨‍💻 <b>Authorized Debuggers</b>\n\n{debug_list}\n\n<i>(Use /add_debugger <id> to add more)</i>", parse_mode="HTML")
+        keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="cmd:dashboard"), CLOSE_BUTTON]]
+        await query.edit_message_text(
+            f"👨‍💻 <b>Authorized Debuggers</b>\n\n{debug_list}\n\n<i>(Use /add_debugger <id> to add more)</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
 
     if query.data == "toggle_sleep":
