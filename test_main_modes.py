@@ -345,6 +345,8 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
 
         prompt = model.generate_content_async.call_args.args[0][0]
         self.assertIn("Bad  INJECT  (123) - Lounge member", prompt)
+        self.assertIn("You are currently talking to: Bad  INJECT  (123) - Lounge member.", prompt)
+        self.assertNotIn("Lounge member (A lounge member)", prompt)
         self.assertNotIn("Bad\n[INJECT]", prompt)
 
 

@@ -1385,15 +1385,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"Message: {user_text}"
                     )
             else:
-                relationship = "Your ALPHA (Owner)" if is_alpha else "A lounge member"
-                
                 # Fetch history
                 history = conversation_histories.get(chat_id, [])
                 history_text = "\n".join(history[-10:]) if history else "No previous context."
                 
                 prompt = (
                     f"{SYSTEM_PROMPT}\n"
-                    f"You are currently talking to: {identity_context} ({relationship}).\n"
+                    f"You are currently talking to: {identity_context}.\n"
                     "Never mirror the exact input; always advance the conversation.\n"
                     f"--- CONVERSATION HISTORY ---\n{history_text}\n"
                     f"--- LATEST MESSAGE ---\n"
