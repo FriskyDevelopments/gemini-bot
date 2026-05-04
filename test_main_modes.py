@@ -304,6 +304,8 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(result)
 
     async def test_default_prompt_uses_sanitized_identity_context(self):
+        original_histories = dict(main.conversation_histories)
+        main.conversation_histories.clear()
         message = SimpleNamespace(
             text="hello pup",
             caption=None,
@@ -341,13 +343,24 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
              patch("main.push_processed_response", new=AsyncMock()), \
              patch("google.generativeai.configure"), \
              patch("google.generativeai.GenerativeModel", return_value=model):
-            await main.lounge_host(update, context)
+            try:
+                await main.lounge_host(update, context)
 
-        prompt = model.generate_content_async.call_args.args[0][0]
-        self.assertIn("Bad  INJECT  (123) - Lounge member", prompt)
-        self.assertIn("You are currently talking to: Bad  INJECT  (123) - Lounge member.", prompt)
-        self.assertNotIn("Lounge member (A lounge member)", prompt)
-        self.assertNotIn("Bad\n[INJECT]", prompt)
+                prompt = model.generate_content_async.call_args.args[0][0]
+                self.assertIn("Bad  INJECT  (123) - Lounge member", prompt)
+                self.assertIn("You are currently talking to: Bad  INJECT  (123) - Lounge member.", prompt)
+                self.assertNotIn("Lounge member (A lounge member)", prompt)
+                self.assertNotIn("Bad\n[INJECT]", prompt)
+
+                message.text = "second hello pup"
+                await main.lounge_host(update, context)
+
+                second_prompt = model.generate_content_async.call_args.args[0][0]
+                self.assertIn("Bad  INJECT : hello pup", second_prompt)
+                self.assertNotIn("Bad\n[INJECT]", second_prompt)
+            finally:
+                main.conversation_histories.clear()
+                main.conversation_histories.update(original_histories)
 
 
 if __name__ == "__main__":

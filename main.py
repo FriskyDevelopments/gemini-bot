@@ -387,9 +387,13 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     return uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids
 
 
-def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+def sanitize_prompt_name(user_name: str):
     # Sanitize user_name to prevent prompt injection or formatting breakage
-    safe_name = re.sub(r'[\r\n\[\]]', ' ', user_name or "Unknown")
+    return re.sub(r'[\r\n\[\]]', ' ', user_name or "Unknown")
+
+
+def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+    safe_name = sanitize_prompt_name(user_name)
     role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
     return f"{safe_name} ({user_id}) - {role}"
 
@@ -1473,7 +1477,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Save to history for conversational continuity
                 if chat_id not in conversation_histories:
                     conversation_histories[chat_id] = []
-                conversation_histories[chat_id].append(f"{user_name}: {user_text}")
+                conversation_histories[chat_id].append(f"{sanitize_prompt_name(user_name)}: {user_text}")
                 conversation_histories[chat_id].append(f"Pupbot: {reply_text}")
                 # Prune to last 15 messages
                 conversation_histories[chat_id] = conversation_histories[chat_id][-15:]
