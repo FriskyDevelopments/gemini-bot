@@ -247,8 +247,7 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         update = SimpleNamespace(callback_query=query)
         context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
 
-        with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
-             patch("main.dashboard_chats", set(), create=True):
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=True)):
             await main.callback_router(update, context)
 
         query.edit_message_text.assert_not_awaited()
