@@ -234,6 +234,27 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(broadcast_call.kwargs["chat_id"], "-200")
         self.assertNotIn("reply_markup", broadcast_call.kwargs)
 
+    async def test_dashboard_callback_sends_message_from_animation_menu(self):
+        chat = SimpleNamespace(id=-100, type="supergroup")
+        message = SimpleNamespace(chat=chat, text=None, caption="menu")
+        query = SimpleNamespace(
+            data="cmd:dashboard",
+            from_user=SimpleNamespace(id=123),
+            message=message,
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        update = SimpleNamespace(callback_query=query)
+        context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
+             patch("main.dashboard_chats", set(), create=True):
+            await main.callback_router(update, context)
+
+        query.edit_message_text.assert_not_awaited()
+        context.bot.send_message.assert_awaited_once()
+        self.assertIn("PUPSONA // ALPHA CONSOLE", context.bot.send_message.call_args.kwargs["text"])
+
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
         original_dynamic_alpha_ids = set(main.dynamic_alpha_ids)

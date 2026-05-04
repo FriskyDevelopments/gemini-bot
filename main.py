@@ -1547,28 +1547,37 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
             alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
             dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
-            await query.edit_message_text(
-                text=(
-                    "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
-                    "──────────────────────\n"
-                    f"  PERSONA       {active_persona}\n"
-                    f"  BUILD         v137 · Apr 2026\n"
-                    f"  ALPHA         <code>{ALPHA}</code>\n"
-                    "──────────────────────\n"
-                    "<b>MODES</b>\n"
-                    f"  ANTIGRAVITY   {antigravity_mode}\n"
-                    f"  ALCHEMY       {alchemy_mode}\n"
-                    f"  DASHBOARD     {dashboard_mode}\n"
-                    "──────────────────────\n"
-                    "<b>REGISTRY</b>\n"
-                    f"  AUTH GROUPS   {len(auth_groups)}\n"
-                    f"  DEBUGGERS     {len(debuggers)}\n"
-                    "──────────────────────\n"
-                    "<i>⚡ All systems nominal.</i>"
-                ),
-                parse_mode="HTML",
-                reply_markup=reply_markup
+            dashboard_text = (
+                "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
+                "──────────────────────\n"
+                f"  PERSONA       {active_persona}\n"
+                f"  BUILD         v137 · Apr 2026\n"
+                f"  ALPHA         <code>{ALPHA}</code>\n"
+                "──────────────────────\n"
+                "<b>MODES</b>\n"
+                f"  ANTIGRAVITY   {antigravity_mode}\n"
+                f"  ALCHEMY       {alchemy_mode}\n"
+                f"  DASHBOARD     {dashboard_mode}\n"
+                "──────────────────────\n"
+                "<b>REGISTRY</b>\n"
+                f"  AUTH GROUPS   {len(auth_groups)}\n"
+                f"  DEBUGGERS     {len(debuggers)}\n"
+                "──────────────────────\n"
+                "<i>⚡ All systems nominal.</i>"
             )
+            if query.message.text:
+                await query.edit_message_text(
+                    text=dashboard_text,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=dashboard_text,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
         except Exception as e: logging.error(f"Dashboard update error: {e}")
         return
 
