@@ -156,6 +156,7 @@ db.init_db()
 jules_chats = set(db.get_val("jules_chats", []))
 antigravity_chats = set(db.get_val("antigravity_chats", []))
 alchemy_chats = set(db.get_val("alchemy_chats", []))
+dashboard_chats = set(db.get_val("dashboard_chats", []))
 admin_assistant_chats = set(db.get_val("admin_assistant_chats", []))
 relay_chats = set(db.get_val("relay_chats", []))
 debuggers = set(db.get_val("debuggers", [ALPHA]))
@@ -182,6 +183,7 @@ def save_state():
     db.set_val("jules_chats", list(jules_chats))
     db.set_val("antigravity_chats", list(antigravity_chats))
     db.set_val("alchemy_chats", list(alchemy_chats))
+    db.set_val("dashboard_chats", list(dashboard_chats))
     db.set_val("admin_assistant_chats", list(admin_assistant_chats))
     db.set_val("relay_chats", list(relay_chats))
     db.set_val("debuggers", list(debuggers))
@@ -1538,37 +1540,47 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
-            [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")]
+            [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")],
+            [CLOSE_BUTTON]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.answer()
         try:
             antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
             alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
             dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=(
-                    "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
-                    "──────────────────────\n"
-                    f"  PERSONA       {active_persona}\n"
-                    f"  BUILD         v137 · Apr 2026\n"
-                    f"  ALPHA         <code>{ALPHA}</code>\n"
-                    "──────────────────────\n"
-                    "<b>MODES</b>\n"
-                    f"  ANTIGRAVITY   {antigravity_mode}\n"
-                    f"  ALCHEMY       {alchemy_mode}\n"
-                    f"  DASHBOARD     {dashboard_mode}\n"
-                    "──────────────────────\n"
-                    "<b>REGISTRY</b>\n"
-                    f"  AUTH GROUPS   {len(auth_groups)}\n"
-                    f"  DEBUGGERS     {len(debuggers)}\n"
-                    "──────────────────────\n"
-                    "<i>⚡ All systems nominal.</i>"
-                ),
-                parse_mode="HTML",
-                reply_markup=reply_markup
+            dashboard_text = (
+                "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
+                "──────────────────────\n"
+                f"  PERSONA       {active_persona}\n"
+                f"  BUILD         v137 · Apr 2026\n"
+                f"  ALPHA         <code>{ALPHA}</code>\n"
+                "──────────────────────\n"
+                "<b>MODES</b>\n"
+                f"  ANTIGRAVITY   {antigravity_mode}\n"
+                f"  ALCHEMY       {alchemy_mode}\n"
+                f"  DASHBOARD     {dashboard_mode}\n"
+                "──────────────────────\n"
+                "<b>REGISTRY</b>\n"
+                f"  AUTH GROUPS   {len(auth_groups)}\n"
+                f"  DEBUGGERS     {len(debuggers)}\n"
+                "──────────────────────\n"
+                "<i>⚡ All systems nominal.</i>"
             )
-        except Exception as e: logging.error(f"Send error: {e}")
+            if query.message.text:
+                await query.edit_message_text(
+                    text=dashboard_text,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=dashboard_text,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup
+                )
+        except Exception as e: logging.error(f"Dashboard update error: {e}")
         return
 
     if query.data == "cmd:alchemy":
@@ -1850,15 +1862,25 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "manage_auth":
         raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
         auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
-        group_list = "\n".join([f"• `{g}`" for g in auth_groups]) if auth_groups else "None"
+        group_list = "\n".join([f"• <code>{html.escape(g)}</code>" for g in auth_groups]) if auth_groups else "None"
         await query.answer()
-        await query.edit_message_text(f"⚙️ <b>Authorized Groups</b>\n\n{group_list}\n\n<i>(Use /authorize_group in a chat to add it, or remove from Doppler to revoke)</i>", parse_mode="HTML")
+        keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="cmd:dashboard"), CLOSE_BUTTON]]
+        await query.edit_message_text(
+            f"⚙️ <b>Authorized Groups</b>\n\n{group_list}\n\n<i>(Use /authorize_group in a chat to add it, or remove from Doppler to revoke)</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
 
     if query.data == "manage_debug":
-        debug_list = "\n".join([f"• `{d}`" for d in debuggers]) if debuggers else "None"
+        debug_list = "\n".join([f"• <code>{html.escape(str(d))}</code>" for d in debuggers]) if debuggers else "None"
         await query.answer()
-        await query.edit_message_text(f"👨‍💻 <b>Authorized Debuggers</b>\n\n{debug_list}\n\n<i>(Use /add_debugger <id> to add more)</i>", parse_mode="HTML")
+        keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="cmd:dashboard"), CLOSE_BUTTON]]
+        await query.edit_message_text(
+            f"👨‍💻 <b>Authorized Debuggers</b>\n\n{debug_list}\n\n<i>(Use /add_debugger &lt;id&gt; to add more)</i>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
 
     if query.data == "toggle_sleep":

@@ -35,3 +35,7 @@
 ## 2026-06-05 - [Unified Markup & Ephemeral Feedback]
 **Learning:** Mixing Markdown and HTML in a Telegram bot leads to parsing errors and inconsistent UI. Standardizing on HTML allows for safer escaping. Furthermore, system feedback (e.g., "User added", "Group unlinked") should always be ephemeral to avoid polluting group history.
 **Action:** Prioritize HTML parse mode for complex templates and ensure every non-conversational system response includes a 'Close' button.
+
+## 2026-06-15 - [In-Place Dashboard Navigation]
+**Learning:** Complex admin consoles or dashboards in Telegram feel more like "apps" and less like "spam" when using `edit_message_text` for all navigational transitions. This keeps the chat history clean and maintains a single focal point for the user.
+**Action:** Use `query.edit_message_text` for all sub-menu transitions in the Alpha Console and ensure every state has a '⬅️ Back' or '🗑️ Close' option to prevent UI dead-ends.
