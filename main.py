@@ -388,8 +388,10 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 
 
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+    # Sanitize user_name to prevent prompt injection or formatting breakage
+    safe_name = re.sub(r'[\r\n\[\]]', ' ', user_name or "Unknown")
     role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
-    return f"{user_name} ({user_id}) - {role}"
+    return f"{safe_name} ({user_id}) - {role}"
 
 
 async def _groq_text_fallback(system_prompt: str, user_text: str) -> str | None:
@@ -1319,7 +1321,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         should_reply = False
         
     if should_reply and has_text_or_photo:
-        user_text = update.message.text or update.message.caption or ""
+        # Enforce length limit to prevent resource exhaustion (DoS) via AI generation
+        user_text = (update.message.text or update.message.caption or "")[:4000]
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
