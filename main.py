@@ -387,9 +387,15 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     return uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids
 
 
+def sanitize_prompt_name(user_name: str):
+    # Sanitize user_name to prevent prompt injection or formatting breakage
+    return re.sub(r'[\r\n\[\]]', ' ', user_name or "Unknown")
+
+
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+    safe_name = sanitize_prompt_name(user_name)
     role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
-    return f"{user_name} ({user_id}) - {role}"
+    return f"{safe_name} ({user_id}) - {role}"
 
 
 async def _groq_text_fallback(system_prompt: str, user_text: str) -> str | None:
@@ -1319,7 +1325,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         should_reply = False
         
     if should_reply and has_text_or_photo:
-        user_text = update.message.text or update.message.caption or ""
+        # Enforce length limit to prevent resource exhaustion (DoS) via AI generation
+        user_text = (update.message.text or update.message.caption or "")[:4000]
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
@@ -1382,15 +1389,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"Message: {user_text}"
                     )
             else:
-                relationship = "Your ALPHA (Owner)" if is_alpha else "A lounge member"
-                
                 # Fetch history
                 history = conversation_histories.get(chat_id, [])
                 history_text = "\n".join(history[-10:]) if history else "No previous context."
                 
                 prompt = (
                     f"{SYSTEM_PROMPT}\n"
-                    f"You are currently talking to: {user_name} ({relationship}).\n"
+                    f"You are currently talking to: {identity_context}.\n"
                     "Never mirror the exact input; always advance the conversation.\n"
                     f"--- CONVERSATION HISTORY ---\n{history_text}\n"
                     f"--- LATEST MESSAGE ---\n"
@@ -1472,7 +1477,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Save to history for conversational continuity
                 if chat_id not in conversation_histories:
                     conversation_histories[chat_id] = []
-                conversation_histories[chat_id].append(f"{user_name}: {user_text}")
+                conversation_histories[chat_id].append(f"{sanitize_prompt_name(user_name)}: {user_text}")
                 conversation_histories[chat_id].append(f"Pupbot: {reply_text}")
                 # Prune to last 15 messages
                 conversation_histories[chat_id] = conversation_histories[chat_id][-15:]
