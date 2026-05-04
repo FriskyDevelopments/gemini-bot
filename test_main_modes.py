@@ -303,6 +303,50 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
                 result = await main._groq_text_fallback("sys", "hello")
                 self.assertIsNone(result)
 
+    async def test_default_prompt_uses_sanitized_identity_context(self):
+        message = SimpleNamespace(
+            text="hello pup",
+            caption=None,
+            photo=None,
+            new_chat_members=None,
+            message_id=10,
+            from_user=SimpleNamespace(id=123),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="supergroup"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(
+                id=123,
+                first_name="Bad\n[INJECT]",
+                username="baduser",
+            ),
+            effective_chat=SimpleNamespace(id=-100),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                id=456,
+                username="PupBot",
+                send_chat_action=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+        model = SimpleNamespace(
+            generate_content_async=AsyncMock(return_value=SimpleNamespace(text="safe reply"))
+        )
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("main.get_effective_mode", return_value="puppy"), \
+             patch("main.push_processed_response", new=AsyncMock()), \
+             patch("google.generativeai.configure"), \
+             patch("google.generativeai.GenerativeModel", return_value=model):
+            await main.lounge_host(update, context)
+
+        prompt = model.generate_content_async.call_args.args[0][0]
+        self.assertIn("Bad  INJECT  (123) - Lounge member", prompt)
+        self.assertNotIn("Bad\n[INJECT]", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

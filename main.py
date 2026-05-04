@@ -1393,7 +1393,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 prompt = (
                     f"{SYSTEM_PROMPT}\n"
-                    f"You are currently talking to: {user_name} ({relationship}).\n"
+                    f"You are currently talking to: {identity_context} ({relationship}).\n"
                     "Never mirror the exact input; always advance the conversation.\n"
                     f"--- CONVERSATION HISTORY ---\n{history_text}\n"
                     f"--- LATEST MESSAGE ---\n"
