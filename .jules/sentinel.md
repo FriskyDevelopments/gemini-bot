@@ -39,3 +39,8 @@
 **Vulnerability:** Raw exception details were still being leaked in multiple handlers (UI, promo status, fallback persistence, and AI engine) despite previous fixes.
 **Learning:** Hardening against information leakage must be exhaustive. Status reports (like promo success/failure) often escape standard error handling and can inadvertently expose backend failures to end-users.
 **Prevention:** Audit all 'except' blocks for 'f-string' interpolation of exceptions in 'send_message' calls. Standardize on generic "Internal error" messages for users while using 'logging.error(..., exc_info=True)' for full context in logs.
+
+## 2026-05-05 - User Identity Prompt Injection
+**Vulnerability:** User-provided display names were interpolated into system prompts without sanitization, allowing for potential prompt injection or formatting breakage using newlines or bracketed metadata.
+**Learning:** Metadata derived from external sources (like Telegram user names) must be treated as untrusted input when used in LLM context construction, even if it seems innocuous.
+**Prevention:** Always sanitize user-provided identity strings by stripping control characters (newlines) and delimiter characters used in the prompt template (e.g., brackets) before interpolation.

@@ -387,9 +387,15 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     return uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids
 
 
+def sanitize_identity_name(user_name: str):
+    # Sanitize user_name to prevent prompt injection and formatting breakage
+    return user_name.replace("\n", " ").replace("\r", " ").replace("[", " ").replace("]", " ")
+
+
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+    safe_name = sanitize_identity_name(user_name)
     role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
-    return f"{user_name} ({user_id}) - {role}"
+    return f"{safe_name} ({user_id}) - {role}"
 
 
 async def _groq_text_fallback(system_prompt: str, user_text: str) -> str | None:
@@ -1326,6 +1332,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         user_name = update.effective_user.first_name
+        safe_user_name = sanitize_identity_name(user_name)
         identity_context = build_identity_context(user_name, user_id, is_alpha)
         
         logging.info(f"🐾 Interaction Detected from {user_name} (ID: {user_id}) in chat {chat_id}")
@@ -1390,7 +1397,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 prompt = (
                     f"{SYSTEM_PROMPT}\n"
-                    f"You are currently talking to: {user_name} ({relationship}).\n"
+                    f"You are currently talking to: {safe_user_name} ({relationship}).\n"
                     "Never mirror the exact input; always advance the conversation.\n"
                     f"--- CONVERSATION HISTORY ---\n{history_text}\n"
                     f"--- LATEST MESSAGE ---\n"
@@ -1472,7 +1479,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Save to history for conversational continuity
                 if chat_id not in conversation_histories:
                     conversation_histories[chat_id] = []
-                conversation_histories[chat_id].append(f"{user_name}: {user_text}")
+                conversation_histories[chat_id].append(f"{safe_user_name}: {user_text}")
                 conversation_histories[chat_id].append(f"Pupbot: {reply_text}")
                 # Prune to last 15 messages
                 conversation_histories[chat_id] = conversation_histories[chat_id][-15:]
