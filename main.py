@@ -1479,7 +1479,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Save to history for conversational continuity
                 if chat_id not in conversation_histories:
                     conversation_histories[chat_id] = []
-                conversation_histories[chat_id].append(f"{user_name}: {user_text}")
+                conversation_histories[chat_id].append(f"{safe_user_name}: {user_text}")
                 conversation_histories[chat_id].append(f"Pupbot: {reply_text}")
                 # Prune to last 15 messages
                 conversation_histories[chat_id] = conversation_histories[chat_id][-15:]
