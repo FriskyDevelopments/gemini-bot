@@ -388,8 +388,10 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 
 
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+    # Sanitize user_name to prevent prompt injection and formatting breakage
+    safe_name = str(user_name or "Unknown")[:100].replace("\n", " ").replace("\r", " ").replace("[", " ").replace("]", " ")
     role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
-    return f"{user_name} ({user_id}) - {role}"
+    return f"{safe_name} ({user_id}) - {role}"
 
 
 async def _groq_text_fallback(system_prompt: str, user_text: str) -> str | None:
