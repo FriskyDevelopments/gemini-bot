@@ -39,3 +39,8 @@
 **Vulnerability:** Raw exception details were still being leaked in multiple handlers (UI, promo status, fallback persistence, and AI engine) despite previous fixes.
 **Learning:** Hardening against information leakage must be exhaustive. Status reports (like promo success/failure) often escape standard error handling and can inadvertently expose backend failures to end-users.
 **Prevention:** Audit all 'except' blocks for 'f-string' interpolation of exceptions in 'send_message' calls. Standardize on generic "Internal error" messages for users while using 'logging.error(..., exc_info=True)' for full context in logs.
+
+## 2026-05-10 - Prompt Injection via User Metadata
+**Vulnerability:** User-provided metadata (like Telegram names) was injected directly into AI system prompts without sanitization, allowing for potential prompt injection or structural breakage.
+**Learning:** Even "trusted" metadata from external platforms must be treated as untrusted input when used in LLM prompt construction, as users have control over these fields.
+**Prevention:** Always sanitize and truncate user-provided metadata (names, bios, etc.) by stripping control characters, newlines, and structural tokens (like brackets) before inclusion in prompts.
