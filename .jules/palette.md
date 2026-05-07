@@ -35,3 +35,7 @@
 ## 2026-06-05 - [Unified Markup & Ephemeral Feedback]
 **Learning:** Mixing Markdown and HTML in a Telegram bot leads to parsing errors and inconsistent UI. Standardizing on HTML allows for safer escaping. Furthermore, system feedback (e.g., "User added", "Group unlinked") should always be ephemeral to avoid polluting group history.
 **Action:** Prioritize HTML parse mode for complex templates and ensure every non-conversational system response includes a 'Close' button.
+
+## 2026-06-07 - [Unified UI State & In-Place Updates]
+**Learning:** For complex admin interfaces, consolidating related callback handlers reduces state fragmentation and ensures a consistent visual experience. Using `edit_message_text` for toggles (like Dashboard Mode) creates a responsive, app-like feel.
+**Action:** Consolidate related UI flows into unified handlers and prioritize in-place message updates over sending new messages for state changes.
