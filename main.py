@@ -388,8 +388,11 @@ async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 
 
 def build_identity_context(user_name: str, user_id: str, is_alpha: bool):
+    # Sanitize user_name to prevent prompt injection or formatting breakage
+    safe_name = (user_name or "Unknown")[:100]
+    safe_name = safe_name.replace("\n", " ").replace("\r", " ").replace("[", " ").replace("]", " ")
     role = "Owner/Alpha (priority authority)" if is_alpha else "Lounge member"
-    return f"{user_name} ({user_id}) - {role}"
+    return f"{safe_name} ({user_id}) - {role}"
 
 
 async def _groq_text_fallback(system_prompt: str, user_text: str) -> str | None:
@@ -706,11 +709,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if is_alpha:
                 parts = text.split()
                 if len(parts) > 1:
-                    debuggers.add(parts[1])
-                    save_state()
-                    try:
-                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} added to debuggers list.", reply_markup=CLOSE_KEYBOARD)
-                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                    user_to_add = parts[1]
+                    if re.match(r"^\d+$", user_to_add):
+                        debuggers.add(user_to_add)
+                        save_state()
+                        try:
+                             await context.bot.send_message(chat_id=chat_id, text=f"✅ User <code>{html.escape(user_to_add)}</code> added to debuggers list.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                        except Exception as e: logging.debug(f"Ignored error: {e}")
+                    else:
+                        try:
+                             await context.bot.send_message(chat_id=chat_id, text="⚠️ Invalid User ID. Please provide a numeric Telegram ID.", reply_markup=CLOSE_KEYBOARD)
+                        except Exception as e: logging.debug(f"Ignored error: {e}")
                 else:
                     try:
                          await context.bot.send_message(chat_id=chat_id, text="Usage: /add_debugger <user_id>", reply_markup=CLOSE_KEYBOARD)
@@ -722,11 +731,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if is_alpha:
                 parts = text.split()
                 if len(parts) > 1:
-                    manual_alpha_ids.add(parts[1])
-                    save_state()
-                    try:
-                         await context.bot.send_message(chat_id=chat_id, text=f"✅ User {parts[1]} has been granted Alpha Admin rights.", reply_markup=CLOSE_KEYBOARD)
-                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                    user_to_add = parts[1]
+                    if re.match(r"^\d+$", user_to_add):
+                        manual_alpha_ids.add(user_to_add)
+                        save_state()
+                        try:
+                             await context.bot.send_message(chat_id=chat_id, text=f"✅ User <code>{html.escape(user_to_add)}</code> has been granted Alpha Admin rights.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                        except Exception as e: logging.debug(f"Ignored error: {e}")
+                    else:
+                        try:
+                             await context.bot.send_message(chat_id=chat_id, text="⚠️ Invalid User ID. Please provide a numeric Telegram ID.", reply_markup=CLOSE_KEYBOARD)
+                        except Exception as e: logging.debug(f"Ignored error: {e}")
                 else:
                     try:
                          await context.bot.send_message(chat_id=chat_id, text="Usage: /add_admin <user_id>", reply_markup=CLOSE_KEYBOARD)
