@@ -10,8 +10,8 @@ model = genai.GenerativeModel('gemini-1.5-flash')
 def run_cmd(cmd):
     try:
         return subprocess.check_output(shlex.split(cmd), shell=False, text=True, stderr=subprocess.STDOUT)
-    except Exception as e:
-        return f"Error: {str(e)}"
+    except Exception:
+        return "Error: Command execution failed."
 
 def audit_project():
     print("🔍 Fase 1: Escaneando ClipFLOW (Mty Edition)...")
