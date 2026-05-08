@@ -1120,6 +1120,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     system_instruction="You are a master vaporwave copywriter. Only output valid JSON.",
                     generation_config=genai.types.GenerationConfig(response_mime_type="application/json")
                 )
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
                 response = await model.generate_content_async(promo_prompt)
                 promo_data = json.loads(response.text)
                 
@@ -1168,7 +1169,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logging.error("DM matrix failed", exc_info=True)
                     dm_status = "⚠️ DM matrix dispatch failed."
 
-                await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML")
+                await context.bot.send_message(chat_id=chat_id, text=f"🚀 <b>Omni-Channel Blast Complete!</b>\n\n{html.escape(twitter_status)}\n{html.escape(dm_status)}", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             except Exception:
                 logging.error("Promo generation failed", exc_info=True)
                 try:
@@ -1184,7 +1185,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_data.pop(user_id, None)
                 save_state()
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text="🛑 Ticketing flow aborted.")
+                    await context.bot.send_message(chat_id=chat_id, text="🛑 Ticketing flow aborted.", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.debug(f"Ignored error: {e}")
                 return
                 
@@ -1193,7 +1194,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if update.message.chat.type != "private":
                     try:
                         await update.message.delete()
-                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML")
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                     except: pass
                     return
 
