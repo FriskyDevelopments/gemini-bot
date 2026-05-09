@@ -261,8 +261,27 @@ def _write_authorized_groups(authorized_groups):
         return True
     except Exception:
         try:
-            with open(env_path, "a") as f:
-                f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
+            lines = []
+            if os.path.exists(env_path):
+                with open(env_path, "r") as f:
+                    lines = f.readlines()
+
+            new_lines = []
+            found = False
+            for line in lines:
+                if line.strip().startswith("AUTHORIZED_GROUPS="):
+                    new_lines.append(f"AUTHORIZED_GROUPS={new_list_str}\n")
+                    found = True
+                else:
+                    new_lines.append(line)
+
+            if not found:
+                if new_lines and not new_lines[-1].endswith("\n"):
+                    new_lines.append("\n")
+                new_lines.append(f"AUTHORIZED_GROUPS={new_list_str}\n")
+
+            with open(env_path, "w") as f:
+                f.writelines(new_lines)
             return True
         except Exception:
             return False
@@ -1621,33 +1640,21 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
-        
-        raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
-        authorized_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
-        
-        if chat_id in authorized_groups:
+
+        if chat_id in _read_authorized_groups():
             await query.answer("🐶 This group is already authorized!", show_alert=True)
             return
-            
-        new_groups = authorized_groups + [chat_id]
-        new_list_str = ",".join(new_groups)
-        env_path = os.path.join(os.path.dirname(__file__), ".env")
-        doppler_cli = "/opt/homebrew/bin/doppler" if os.path.exists("/opt/homebrew/bin/doppler") else "doppler"
-        doppler_project = "geminipup"
-        
-        try:
-            subprocess.run([doppler_cli, "secrets", "set", f"AUTHORIZED_GROUPS={new_list_str}", "-p", doppler_project, "-c", "dev"], check=True)
+
+        if _authorize_group_local(chat_id):
             await query.answer("✅ GROUP AUTHORIZED!", show_alert=True)
-            await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-        except Exception as e:
-            try:
-                with open(env_path, "a") as f:
-                    f.write(f"\nAUTHORIZED_GROUPS={new_list_str}\n")
-                await query.answer("✅ GROUP AUTHORIZED (Local)", show_alert=True)
-                await context.bot.send_message(chat_id=chat_id, text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!\n<i>(Local fallback saved)</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e2:
-                logging.error("Failed to save authorized group permanently", exc_info=True)
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ Added to memory, but failed to save permanently.")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!",
+                parse_mode="HTML",
+                reply_markup=CLOSE_KEYBOARD
+            )
+        else:
+            await query.answer("⚠️ Failed to save authorization.", show_alert=True)
         return
 
     if query.data == "cmd:antigravity":
