@@ -39,3 +39,8 @@
 **Vulnerability:** Raw exception details were still being leaked in multiple handlers (UI, promo status, fallback persistence, and AI engine) despite previous fixes.
 **Learning:** Hardening against information leakage must be exhaustive. Status reports (like promo success/failure) often escape standard error handling and can inadvertently expose backend failures to end-users.
 **Prevention:** Audit all 'except' blocks for 'f-string' interpolation of exceptions in 'send_message' calls. Standardize on generic "Internal error" messages for users while using 'logging.error(..., exc_info=True)' for full context in logs.
+
+## 2026-05-09 - Idempotent Configuration Persistence
+**Vulnerability:** The group authorization fallback in `main.py` appended new `AUTHORIZED_GROUPS` entries to the `.env` file without removing old ones, leading to file bloat and potential resource exhaustion.
+**Learning:** Fallback persistence mechanisms for configuration must be idempotent. Simple append-only strategies can cause degradation over time or accidental configuration corruption.
+**Prevention:** Always implement a read-modify-write pattern for configuration updates to ensure only one instance of a key exists, preserving the file's integrity and preventing resource leaks.
