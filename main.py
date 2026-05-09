@@ -99,28 +99,28 @@ You have the power to instantly conjure images! If the admins ask you to generat
 <a href="https://image.pollinations.ai/prompt/{url_encoded_detailed_description}?width=1024&height=1024&nologo=true">&#8205;</a>
 Replace {url_encoded_detailed_description} with a highly descriptive, comma-separated image prompt (with spaces replaced by %20). Do not complain about not being able to draw. You CAN draw using this magic spell."""
 
-MENU_TEXT = """🐾 <b>Welcome to Pupbot!</b> 🥂
-
-I'm your lounge host. Here are my commands:
-• /menu (or /help) - Show this menu
-• /ping [msg] - Send feedback to the dev team
-• /ticket - Open the bug reporter (Debuggers)
-
-👑 <b>Admin / Alpha Commands:</b>
-• /pupsona [friendly|playful] - View or set the bot's tone
-• /admin_assistant - Toggle operations assistant persona
-• /antigravity - Toggle developer mode
-• /alchemy - Toggle creative wizard mode
-• /relay - Broadcast to the Main Lounge
-• /invite - Generate a 1-use invite link
-• /link_group - Generate secure linking code (admin lounge)
-• /link_group CODE - Complete secure link from target group
-• /groups - Show linked target groups
-• /unlink_group CHAT_ID - Remove linked target group
-• /authorize_group - Authorize current group
-• /add_debugger [id] - Add a ticket debugger
-
-<i>Start chatting or try a command!</i>"""
+MENU_TEXT = (
+    "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
+    "<b>🎭 Personas & Modes</b>\n"
+    "  • <code>/alchemy</code> — Summon the Λlchemy Curator Wizard\n"
+    "  • <code>/antigravity</code> — Summon the Antigravity Developer Core\n"
+    "  • <code>/admin_assistant</code> — Toggle operations assistant\n\n"
+    "<b>🛠️ System & Debugging</b>\n"
+    "  • <code>/dashboard</code> — Open STIX MΛGIC Deployment Hub\n"
+    "  • <code>/ticket</code> — Open the Jules Bug Reporter\n"
+    "  • <code>/ping</code> — Quick feedback & Help Menu\n"
+    "  • <code>/relay</code> — Broadcast to the Main Lounge\n"
+    "  • <code>/invite</code> — Generate a 1-use invite link\n\n"
+    "<b>🔐 Alpha / Admin Only</b>\n"
+    "  • <code>/pupsona</code> — PupSona Admin Panel\n"
+    "  • <code>/link_group</code> — Link current group to Admin Lounge\n"
+    "  • <code>/groups</code> — Show linked target groups\n"
+    "  • <code>/authorize_group</code> — Allow Pupbot to speak\n"
+    "  • <code>/add_debugger &lt;id&gt;</code> — Grant Reporter access\n"
+    "  • <code>/add_admin &lt;id&gt;</code> — Grant Alpha Admin rights\n\n"
+    "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>\n\n"
+    "Select a command from the boxes below to interact with my systems!"
+)
 
 ANTIGRAVITY_MENU_TEXT = """⚡ <b>ANTIGRAVITY SYSTEMS ONLINE</b>
 
@@ -178,6 +178,42 @@ admin_owner_last_refresh = 0.0
 
 CLOSE_BUTTON = InlineKeyboardButton("🗑️ Close", callback_data="close_message")
 CLOSE_KEYBOARD = InlineKeyboardMarkup([[CLOSE_BUTTON]])
+
+MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("🪄 /alchemy", callback_data="cmd:alchemy"),
+        InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
+    ],
+    [
+        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard"),
+        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket")
+    ],
+    [
+        InlineKeyboardButton("📡 /ping", callback_data="cmd:ping")
+    ],
+    [
+        InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
+        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
+    ],
+    [CLOSE_BUTTON]
+])
+
+TICKET_PROJECT_KEYBOARD = InlineKeyboardMarkup([
+    [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
+     InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
+    [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
+     InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
+    [InlineKeyboardButton("⬅️ Back", callback_data="show_menu"),
+     InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
+])
+
+PING_MAIN_KEYBOARD = InlineKeyboardMarkup([
+    [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
+    [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
+    [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
+    [InlineKeyboardButton("⬅️ Back", callback_data="show_menu"),
+     CLOSE_BUTTON]
+])
 
 def save_state():
     db.set_val("jules_chats", list(jules_chats))
@@ -660,50 +696,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower in ["/start", "/menu", "/help"]:
-            menu_text = (
-                "🐾 <b>PUPBOT COMMAND CENTER</b> 🐾\n\n"
-                "<b>🎭 Personas & Modes</b>\n"
-                "  • <code>/alchemy</code> — Summon the Λlchemy Curator Wizard\n"
-                "  • <code>/antigravity</code> — Summon the Antigravity Developer Core\n\n"
-                "<b>🛠️ System & Debugging</b>\n"
-                "  • <code>/dashboard</code> — Open STIX MΛGIC Deployment Hub\n"
-                "  • <code>/ticket</code> — Open the Jules Bug Reporter\n"
-                "  • <code>/ping</code> — Quick feedback & Help Menu\n\n"
-                "<b>🔐 Alpha / Admin Only</b>\n"
-                "  • <code>/pupsona</code> — PupSona Admin Panel\n"
-                "  • <code>/authorize_group</code> — Allow Pupbot to speak\n"
-                "  • <code>/add_debugger &lt;id&gt;</code> — Grant Reporter access\n"
-                "  • <code>/add_admin &lt;id&gt;</code> — Grant Alpha Admin rights\n\n"
-                "<i>Tip: Typing 'promo' in the Admin Lounge triggers the Omni-Channel Broadcast.</i>\n\n"
-                "Select a command from the boxes below to interact with my systems!"
-            )
-            
-            keyboard = [
-                [
-                    InlineKeyboardButton("🪄 /alchemy", callback_data="cmd:alchemy"),
-                    InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
-                ],
-                [
-                    InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard"),
-                    InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket")
-                ],
-                [
-                    InlineKeyboardButton("📡 /ping", callback_data="cmd:ping")
-                ],
-                [
-                    InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
-                    InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
-                ],
-                [CLOSE_BUTTON]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
             try:
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=menu_text, parse_mode="HTML", reply_markup=reply_markup)
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
             except Exception as e:
                 logging.error("Menu formatting crash", exc_info=True)
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ The color boxes broke Telegram! An internal error occurred.")
+                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
             return
 
         # Command to add debuggers
@@ -1047,21 +1045,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ticket_states[user_id] = "project"
                 save_state()
                 
-                keyboard = [
-                    [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
-                     InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
-                    [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
-                     InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
-                    [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
                 try:
                     await context.bot.send_message(
                         chat_id=chat_id, 
                         text="👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
                         parse_mode="HTML",
-                        reply_markup=reply_markup
+                        reply_markup=TICKET_PROJECT_KEYBOARD
                     )
                 except Exception as e: logging.debug(f"Ignored error: {e}")
             else:
@@ -1693,13 +1682,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_states[user_id] = "ping_comment_entry"
         save_state()
         await query.answer()
-        keyboard = [
-            [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
-            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
-            [CLOSE_BUTTON]
-        ]
-        await context.bot.send_message(chat_id=chat_id, text="✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        text = "✅ <b>JULES SYSTEM: ONLINE.</b>"
+        try:
+            await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=PING_MAIN_KEYBOARD)
+        except Exception:
+            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=PING_MAIN_KEYBOARD)
         return
 
     if query.data == "cmd:ticket":
@@ -1707,19 +1694,16 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_data.pop(user_id, None)
         save_state()
         await query.answer()
-        keyboard = [
-            [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
-             InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
-            [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
-             InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
-        ]
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        text = (
+            "👔 <b>Jules Diagnostic Interface</b>\n"
+            "<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\n"
+            "Entering Bug Submission Flow. (Type /cancel to abort)\n\n"
+            "Which <b>Project</b> is this bug affecting?"
         )
+        try:
+            await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=TICKET_PROJECT_KEYBOARD)
+        except Exception:
+            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=TICKET_PROJECT_KEYBOARD)
         return
 
     if query.data.startswith("relay_"):
@@ -1784,26 +1768,25 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         active_menu = MENU_TEXT
         effective_mode = get_effective_mode(chat_id)
+
         if effective_mode == "antigravity":
-            active_menu = ANTIGRAVITY_MENU_TEXT
+            active_menu = f"{ANTIGRAVITY_MENU_TEXT}\n\n{MENU_TEXT}"
         elif effective_mode == "alchemy":
-            active_menu = ALCHEMY_MENU_TEXT
+            active_menu = f"{ALCHEMY_MENU_TEXT}\n\n{MENU_TEXT}"
         elif effective_mode == "admin_assistant":
-            active_menu = ADMIN_ASSISTANT_MENU_TEXT
-        await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            active_menu = f"{ADMIN_ASSISTANT_MENU_TEXT}\n\n{MENU_TEXT}"
+
+        try:
+            await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+        except Exception:
+            await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
         return
 
     if query.data == "ping_back":
         ticket_states.pop(user_id, None)
         save_state()
         await query.answer()
-        keyboard = [
-            [InlineKeyboardButton("📝 Add Logic Comment", callback_data="ping_comment")],
-            [InlineKeyboardButton("🚨 Report Bot Unresponsive", callback_data="ping_bot_dead")],
-            [InlineKeyboardButton("❓ Help / Tester Guide", callback_data="ping_help")],
-            [CLOSE_BUTTON]
-        ]
-        await query.edit_message_text("✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text("✅ <b>JULES SYSTEM: ONLINE.</b>", parse_mode="HTML", reply_markup=PING_MAIN_KEYBOARD)
         return
 
     if query.data == "ticket_back":
@@ -1811,17 +1794,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ticket_data.pop(user_id, None)
         save_state()
         await query.answer()
-        keyboard = [
-            [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
-             InlineKeyboardButton("NE ≡ BU", callback_data="ticket_proj:Nebulosa")],
-            [InlineKeyboardButton("Pupbot", callback_data="ticket_proj:gemini-bot"),
-             InlineKeyboardButton("Other", callback_data="ticket_proj:Other")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="ticket_cancel")]
-        ]
         await query.edit_message_text(
             "👔 <b>Jules Diagnostic Interface</b>\n<i>(Use this strictly to submit detailed, project-specific bugs.)</i>\nEntering Bug Submission Flow. (Type /cancel to abort)\n\nWhich <b>Project</b> is this bug affecting?",
             parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=TICKET_PROJECT_KEYBOARD
         )
         return
     
