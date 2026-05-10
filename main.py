@@ -171,7 +171,7 @@ sleep_mode = db.get_val("sleep_mode", False)
 relay_drafts = {}
 conversation_histories = {}
 
-CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
+CORE_ALPHA_IDS = {str(uid).strip() for uid in [ALPHA, *EXTRA_ALPHAS] if str(uid).strip()}
 LINK_CODE_TTL_SECONDS = int(os.getenv("LINK_CODE_TTL_SECONDS", "900"))
 ADMIN_OWNER_REFRESH_SECONDS = int(os.getenv("ADMIN_OWNER_REFRESH_SECONDS", "300"))
 admin_owner_last_refresh = 0.0
@@ -438,6 +438,8 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
 
 async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     uid = _safe_chat_id(user_id)
+    if not uid:
+        return False
     if uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids:
         return True
     await refresh_dynamic_alpha_ids(context)
@@ -1345,7 +1347,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         should_reply = False
         
     if should_reply and has_text_or_photo:
-        user_text = update.message.text or update.message.caption or ""
+        user_text = (update.message.text or update.message.caption or "")[:4000]
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
