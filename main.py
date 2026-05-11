@@ -1544,7 +1544,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.delete_message()
         return
 
-    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona"]:
+    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona", "cmd:alchemy", "cmd:relay_toggle", "cmd:antigravity", "toggle_sleep"]:
         if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
@@ -1557,10 +1557,58 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 dashboard_chats.add(chat_id)
                 await query.answer("🔮 Dashboard Mode ENABLED.")
             save_state()
+        elif query.data == "cmd:alchemy":
+            if chat_id in alchemy_chats:
+                alchemy_chats.remove(chat_id)
+                await query.answer("🪄 Λlchemy Curator Deactivated.")
+            else:
+                alchemy_chats.add(chat_id)
+                await query.answer("🪄 Λlchemy Curator ONLINE.")
+            save_state()
+        elif query.data == "cmd:relay_toggle":
+            if chat_id in relay_chats:
+                relay_chats.remove(chat_id)
+                await query.answer("📡 Relay Mode OFF.")
+            else:
+                relay_chats.add(chat_id)
+                await query.answer("📡 Relay Mode ON.")
+            save_state()
+        elif query.data == "cmd:antigravity":
+            if chat_id in antigravity_chats:
+                antigravity_chats.remove(chat_id)
+                await query.answer("🔄 Antigravity Mode Deactivated.")
+            else:
+                if query.message.chat.type != "private":
+                    ticket_states[user_id] = "antigravity_bypass"
+                    save_state()
+                    await query.answer()
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter Emoji Spring to summon Antigravity into this communal chat:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.error(f"Send error: {e}")
+                    return
+                else:
+                    antigravity_chats.add(chat_id)
+                    await query.answer("⚡ Antigravity Interface ONLINE.")
+            save_state()
+        elif query.data == "toggle_sleep":
+            global sleep_mode
+            sleep_mode = not sleep_mode
+            save_state()
+            status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
+            await query.answer(f"Sleep Mode is now {status}")
         else:
             await query.answer()
 
-        active_persona = "🧙 Λlchemy Curator" if chat_id in alchemy_chats else "🐾 Pupbot (Default)"
+        mode = get_mode(chat_id)
+        if mode == "antigravity":
+            active_persona = "⚡ Antigravity Dev"
+        elif mode == "alchemy":
+            active_persona = "🧙 Λlchemy Curator"
+        elif mode == "admin_assistant":
+            active_persona = "👔 Admin Assistant"
+        else:
+            active_persona = "🐾 Pupbot (Default)"
+
         raw_groups = os.getenv("AUTHORIZED_GROUPS", "")
         auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
         deploy_url = "https://security.friskydev.com"
@@ -1576,6 +1624,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton("📦 Emoji Pack", url="https://t.me/addemoji/arcanum_magic_emojis_v3_by_stixsignal_bot")],
             [InlineKeyboardButton("🔮 /dashmode", callback_data="cmd:dashmode"),
              InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
+            [InlineKeyboardButton("🪄 /alchemy", callback_data="cmd:alchemy"),
+             InlineKeyboardButton("📡 /relay", callback_data="cmd:relay_toggle")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
             [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")],
@@ -1586,6 +1636,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
         alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
         dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
+        relay_mode = "ON" if chat_id in relay_chats else "—"
+        sleep_status = "💤 ACTIVE" if sleep_mode else "☀️ INACTIVE"
 
         console_text = (
             "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
@@ -1598,6 +1650,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  ANTIGRAVITY   {antigravity_mode}\n"
             f"  ALCHEMY       {alchemy_mode}\n"
             f"  DASHBOARD     {dashboard_mode}\n"
+            f"  RELAY         {relay_mode}\n"
+            f"  SLEEP MODE    {sleep_status}\n"
             "──────────────────────\n"
             "<b>REGISTRY</b>\n"
             f"  AUTH GROUPS   {len(auth_groups)}\n"
@@ -1614,27 +1668,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logging.error(f"Alpha Console display error: {e}")
         return
-
-    if query.data == "cmd:alchemy":
-        if not await is_alpha_user(context, user_id):
-            await query.answer("⛔ Access Denied.", show_alert=True)
-            return
-        if chat_id in alchemy_chats:
-            alchemy_chats.remove(chat_id)
-            save_state()
-            await query.answer("🪄 Λlchemy Curator Deactivated.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        else:
-            alchemy_chats.add(chat_id)
-            save_state()
-            await query.answer("🪄 Λlchemy Curator ONLINE.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator ONLINE.</b>\nThe Cauldron is bubbling. Let's brew some viral magic.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        return
-
 
     if query.data == "cmd:authorize_group":
         if not await is_alpha_user(context, user_id):
@@ -1657,33 +1690,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⚠️ Failed to save authorization.", show_alert=True)
         return
 
-    if query.data == "cmd:antigravity":
-        if not await is_alpha_user(context, user_id):
-            await query.answer("⛔ Access Denied.", show_alert=True)
-            return
-        if chat_id in antigravity_chats:
-            antigravity_chats.remove(chat_id)
-            save_state()
-            await query.answer("🔄 Antigravity Mode Deactivated.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🔄 <b>Antigravity Mode Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        else:
-            if query.message.chat.type != "private":
-                ticket_states[user_id] = "antigravity_bypass"
-                save_state()
-                await query.answer()
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter Emoji Spring to summon Antigravity into this communal chat:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-                except Exception as e: logging.error(f"Send error: {e}")
-            else:
-                antigravity_chats.add(chat_id)
-                save_state()
-                await query.answer("⚡ Antigravity Interface ONLINE.")
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-                except Exception as e: logging.error(f"Send error: {e}")
-        return
 
     if query.data == "cmd:ping":
         ticket_states[user_id] = "ping_comment_entry"
@@ -1848,13 +1854,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if query.data == "toggle_sleep":
-        global sleep_mode
-        sleep_mode = not sleep_mode
-        save_state()
-        status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
-        await query.answer(f"Sleep Mode is now {status}", show_alert=True)
-        return
 
     if query.data == "ping_bot_dead":
         username = update.effective_user.username or user_id
