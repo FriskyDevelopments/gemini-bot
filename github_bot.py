@@ -140,13 +140,20 @@ def github_webhook():
     # 2. Listen for manual trigger via comments (@pupbot or /pupbot)
     elif event == "issue_comment" and payload.get("action") == "created":
         comment_body = payload["comment"]["body"].lower()
-        if ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body or "@gemini" in comment_body or "gemini" in comment_body) and "pull_request" in payload["issue"]:
+        # Security: Only allow manual triggers from trusted members to prevent quota abuse.
+        # Allowed associations: OWNER, MEMBER, COLLABORATOR.
+        author_association = payload["comment"].get("author_association", "NONE")
+        is_trusted = author_association in ("OWNER", "MEMBER", "COLLABORATOR")
+
+        if is_trusted and ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body or "@gemini" in comment_body or "gemini" in comment_body) and "pull_request" in payload["issue"]:
             pr_number = payload["issue"]["number"]
             repo_full_name = payload["repository"]["full_name"]
             pr_api_url = payload["issue"]["pull_request"]["url"]
             print(f"Manual Codepup review triggered via comment on PR #{pr_number}")
             # For PR API URLs, we must send the V3 diff accept header
             perform_review(pr_number, pr_api_url, repo_full_name, use_api_header=True)
+        elif not is_trusted and any(trigger in comment_body for trigger in ["@pupbot", "/pupbot", "/review", "@gemini"]):
+            print(f"Unauthorized trigger attempt by {payload['sender']['login']} (Association: {author_association})")
 
     return jsonify({"status": "ok"})
 

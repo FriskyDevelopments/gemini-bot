@@ -63,5 +63,39 @@ class TestSecurity(unittest.TestCase):
         self.assertFalse(perform_review(1, 'https://github.com/foo/bar', 'foo/bar/baz'))
         self.assertFalse(perform_review(1, 'https://github.com/foo/bar', '../../etc/passwd'))
 
+    def test_manual_trigger_authorization(self):
+        from unittest.mock import patch
+
+        payload_base = {
+            'action': 'created',
+            'issue': {'number': 1, 'pull_request': {'url': 'https://api.github.com/repos/foo/bar/pulls/1'}},
+            'repository': {'full_name': 'foo/bar'},
+            'sender': {'login': 'testuser'}
+        }
+
+        # 1. Test unauthorized (NONE)
+        payload_unauth = payload_base.copy()
+        payload_unauth['comment'] = {'body': '@pupbot review', 'author_association': 'NONE'}
+        payload_unauth_json = json.dumps(payload_unauth)
+        sig_unauth = 'sha256=' + hmac.new(b'test_secret', msg=payload_unauth_json.encode('utf-8'), digestmod=hashlib.sha256).hexdigest()
+
+        with patch('github_bot.perform_review') as mocked_perform:
+            headers = {'X-Hub-Signature-256': sig_unauth, 'X-GitHub-Event': 'issue_comment'}
+            resp = self.app.post('/github-webhook', data=payload_unauth_json, headers=headers, content_type='application/json')
+            self.assertEqual(resp.status_code, 200)
+            mocked_perform.assert_not_called()
+
+        # 2. Test authorized (OWNER)
+        payload_auth = payload_base.copy()
+        payload_auth['comment'] = {'body': '@pupbot review', 'author_association': 'OWNER'}
+        payload_auth_json = json.dumps(payload_auth)
+        sig_auth = 'sha256=' + hmac.new(b'test_secret', msg=payload_auth_json.encode('utf-8'), digestmod=hashlib.sha256).hexdigest()
+
+        with patch('github_bot.perform_review') as mocked_perform:
+            headers = {'X-Hub-Signature-256': sig_auth, 'X-GitHub-Event': 'issue_comment'}
+            resp = self.app.post('/github-webhook', data=payload_auth_json, headers=headers, content_type='application/json')
+            self.assertEqual(resp.status_code, 200)
+            mocked_perform.assert_called_once()
+
 if __name__ == '__main__':
     unittest.main()
