@@ -44,3 +44,8 @@
 **Vulnerability:** The group authorization fallback in `main.py` appended new `AUTHORIZED_GROUPS` entries to the `.env` file without removing old ones, leading to file bloat and potential resource exhaustion.
 **Learning:** Fallback persistence mechanisms for configuration must be idempotent. Simple append-only strategies can cause degradation over time or accidental configuration corruption.
 **Prevention:** Always implement a read-modify-write pattern for configuration updates to ensure only one instance of a key exists, preserving the file's integrity and preventing resource leaks.
+
+## 2026-05-10 - Hardening Auth Sets & Input Limits
+**Vulnerability:** Authorization sets (like `CORE_ALPHA_IDS`) could contain empty strings due to loose initialization, potentially allowing auth bypasses if user IDs were not strictly validated. Conversational inputs lacked length limits, posing a resource exhaustion risk.
+**Learning:** Hardening security sets requires type-safe initialization; using `.strip()` on unvalidated inputs from `.env` or `os.getenv` can cause crashes (AttributeError) if values are unexpectedly non-string types (e.g., integers). Early-exit guards in auth helpers are essential for defense-in-depth.
+**Prevention:** Use list comprehensions with explicit type casting and filtering: `{str(uid).strip() for uid in [...] if str(uid).strip()}`. Always add early-exit guards to auth functions (e.g., `if not uid: return False`) and enforce application-level truncation for all user-provided text.
