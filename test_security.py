@@ -63,5 +63,39 @@ class TestSecurity(unittest.TestCase):
         self.assertFalse(perform_review(1, 'https://github.com/foo/bar', 'foo/bar/baz'))
         self.assertFalse(perform_review(1, 'https://github.com/foo/bar', '../../etc/passwd'))
 
+    def test_webhook_manual_review_authorization(self):
+        import github_bot
+        from unittest.mock import patch
+
+        # Payload for manual review trigger
+        payload_dict = {
+            'action': 'created',
+            'issue': {'number': 1, 'pull_request': {'url': 'https://api.github.com/repos/foo/bar/pulls/1'}},
+            'comment': {'body': '@pupbot review', 'author_association': 'NONE'},
+            'repository': {'full_name': 'foo/bar'}
+        }
+
+        def send_payload(p):
+            p_json = json.dumps(p)
+            sig = 'sha256=' + hmac.new(b'test_secret', msg=p_json.encode('utf-8'), digestmod=hashlib.sha256).hexdigest()
+            headers = {'X-Hub-Signature-256': sig, 'X-GitHub-Event': 'issue_comment'}
+            return self.app.post('/github-webhook', data=p_json, headers=headers, content_type='application/json')
+
+        with patch('github_bot.perform_review') as mocked_review:
+            # 1. Unauthorized user (NONE)
+            resp = send_payload(payload_dict)
+            self.assertEqual(resp.status_code, 200)
+            data = json.loads(resp.data)
+            self.assertEqual(data['status'], 'denied')
+            self.assertFalse(mocked_review.called)
+
+            # 2. Authorized user (MEMBER)
+            payload_dict['comment']['author_association'] = 'MEMBER'
+            resp = send_payload(payload_dict)
+            self.assertEqual(resp.status_code, 200)
+            data = json.loads(resp.data)
+            self.assertEqual(data['status'], 'ok')
+            self.assertTrue(mocked_review.called)
+
 if __name__ == '__main__':
     unittest.main()

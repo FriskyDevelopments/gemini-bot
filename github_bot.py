@@ -141,6 +141,12 @@ def github_webhook():
     elif event == "issue_comment" and payload.get("action") == "created":
         comment_body = payload["comment"]["body"].lower()
         if ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body or "@gemini" in comment_body or "gemini" in comment_body) and "pull_request" in payload["issue"]:
+            # Security: Only allow OWNER, MEMBER, or COLLABORATOR to trigger manual reviews
+            author_assoc = payload.get("comment", {}).get("author_association")
+            if author_assoc not in ("OWNER", "MEMBER", "COLLABORATOR"):
+                print(f"Blocked unauthorized manual review trigger from association: {author_assoc}")
+                return jsonify({"status": "denied", "reason": "unauthorized"}), 200
+
             pr_number = payload["issue"]["number"]
             repo_full_name = payload["repository"]["full_name"]
             pr_api_url = payload["issue"]["pull_request"]["url"]
