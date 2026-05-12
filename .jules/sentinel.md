@@ -44,3 +44,8 @@
 **Vulnerability:** The group authorization fallback in `main.py` appended new `AUTHORIZED_GROUPS` entries to the `.env` file without removing old ones, leading to file bloat and potential resource exhaustion.
 **Learning:** Fallback persistence mechanisms for configuration must be idempotent. Simple append-only strategies can cause degradation over time or accidental configuration corruption.
 **Prevention:** Always implement a read-modify-write pattern for configuration updates to ensure only one instance of a key exists, preserving the file's integrity and preventing resource leaks.
+
+## 2026-05-16 - Unauthorized Manual AI Review Triggers
+**Vulnerability:** The GitHub bot allowed any user to trigger an AI-powered manual code review via keywords in issue comments, regardless of their association with the repository.
+**Learning:** Event-driven automation that consumes external API quotas (like Gemini) must enforce strict authorization checks on the event actor, even for seemingly "public" interactions like comments.
+**Prevention:** Always validate the `author_association` (or similar permission field) in webhook payloads before executing resource-intensive operations. Restrict triggers to 'OWNER', 'MEMBER', or 'COLLABORATOR' by default.
