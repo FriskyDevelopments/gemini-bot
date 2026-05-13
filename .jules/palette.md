@@ -39,3 +39,7 @@
 ## 2026-06-07 - [Unified UI State & In-Place Updates]
 **Learning:** For complex admin interfaces, consolidating related callback handlers reduces state fragmentation and ensures a consistent visual experience. Using `edit_message_text` for toggles (like Dashboard Mode) creates a responsive, app-like feel.
 **Action:** Consolidate related UI flows into unified handlers and prioritize in-place message updates over sending new messages for state changes.
+
+## 2026-06-12 - [State Guardrails & Feature Discoverability]
+**Learning:** In multi-step Telegram bot flows, entering a state-capturing mode (e.g., waiting for text input) prematurely can lead to accidental submissions. Furthermore, features restricted to specific users (like Alpha Relay) are easily forgotten if they aren't visible in the primary management console.
+**Action:** Only activate input-capturing states when the user explicitly selects a task-specific option, and consolidate all relevant feature toggles into a unified management dashboard with clear status indicators.
