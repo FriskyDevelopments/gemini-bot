@@ -234,6 +234,36 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(broadcast_call.kwargs["chat_id"], "-200")
         self.assertNotIn("reply_markup", broadcast_call.kwargs)
 
+    async def test_menu_falls_back_when_typing_action_fails(self):
+        message = SimpleNamespace(
+            text="/menu",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123, username="pup", first_name="Pup"),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="private"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id=-100),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_chat_action=AsyncMock(side_effect=RuntimeError("rate limited")),
+                send_animation=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)):
+            await main.lounge_host(update, context)
+
+        context.bot.send_animation.assert_not_awaited()
+        context.bot.send_message.assert_awaited_once()
+        self.assertEqual(context.bot.send_message.await_args.kwargs["text"], main.MENU_TEXT)
+
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
         original_dynamic_alpha_ids = set(main.dynamic_alpha_ids)

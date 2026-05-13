@@ -715,8 +715,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower in ["/start", "/menu", "/help"]:
-            await context.bot.send_chat_action(chat_id=chat_id, action='typing')
             try:
+                await context.bot.send_chat_action(chat_id=chat_id, action='typing')
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
                     await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
             except Exception as e:
