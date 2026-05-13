@@ -294,6 +294,34 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
             main.dynamic_alpha_ids.update(original_dynamic_alpha_ids)
             main.admin_owner_last_refresh = original_admin_owner_last_refresh
 
+    async def test_dashboard_relay_toggle_targets_admin_lounge_from_private_chat(self):
+        original_admin_lounge_id = main.ADMIN_LOUNGE_ID
+        original_relay_chats = set(main.relay_chats)
+        try:
+            main.ADMIN_LOUNGE_ID = "-100123"
+            main.relay_chats.clear()
+            query = SimpleNamespace(
+                data="cmd:relay_toggle",
+                from_user=SimpleNamespace(id=123),
+                message=SimpleNamespace(chat=SimpleNamespace(id=456, type="private")),
+                answer=AsyncMock(),
+                edit_message_text=AsyncMock(),
+            )
+            update = SimpleNamespace(callback_query=query)
+            context = SimpleNamespace()
+
+            with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
+                 patch("main.save_state", return_value=None):
+                await main.callback_router(update, context)
+
+            self.assertIn("-100123", main.relay_chats)
+            self.assertNotIn("456", main.relay_chats)
+            self.assertIn("RELAY         ON", query.edit_message_text.await_args.kwargs["text"])
+        finally:
+            main.ADMIN_LOUNGE_ID = original_admin_lounge_id
+            main.relay_chats.clear()
+            main.relay_chats.update(original_relay_chats)
+
     async def test_groq_fallback_returns_text_on_success(self):
         """_groq_text_fallback should return response text when Groq responds OK."""
         import httpx
