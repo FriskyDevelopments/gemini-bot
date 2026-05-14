@@ -234,6 +234,36 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(broadcast_call.kwargs["chat_id"], "-200")
         self.assertNotIn("reply_markup", broadcast_call.kwargs)
 
+    async def test_menu_falls_back_when_typing_action_fails(self):
+        message = SimpleNamespace(
+            text="/menu",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123, username="pup", first_name="Pup"),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="private"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id=-100),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_chat_action=AsyncMock(side_effect=RuntimeError("rate limited")),
+                send_animation=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)):
+            await main.lounge_host(update, context)
+
+        context.bot.send_animation.assert_not_awaited()
+        context.bot.send_message.assert_awaited_once()
+        self.assertEqual(context.bot.send_message.await_args.kwargs["text"], main.MENU_TEXT)
+
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
         original_dynamic_alpha_ids = set(main.dynamic_alpha_ids)
@@ -263,6 +293,34 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
             main.dynamic_alpha_ids.clear()
             main.dynamic_alpha_ids.update(original_dynamic_alpha_ids)
             main.admin_owner_last_refresh = original_admin_owner_last_refresh
+
+    async def test_dashboard_relay_toggle_targets_admin_lounge_from_private_chat(self):
+        original_admin_lounge_id = main.ADMIN_LOUNGE_ID
+        original_relay_chats = set(main.relay_chats)
+        try:
+            main.ADMIN_LOUNGE_ID = "-100123"
+            main.relay_chats.clear()
+            query = SimpleNamespace(
+                data="cmd:relay_toggle",
+                from_user=SimpleNamespace(id=123),
+                message=SimpleNamespace(chat=SimpleNamespace(id=456, type="private")),
+                answer=AsyncMock(),
+                edit_message_text=AsyncMock(),
+            )
+            update = SimpleNamespace(callback_query=query)
+            context = SimpleNamespace()
+
+            with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
+                 patch("main.save_state", return_value=None):
+                await main.callback_router(update, context)
+
+            self.assertIn("-100123", main.relay_chats)
+            self.assertNotIn("456", main.relay_chats)
+            self.assertIn("RELAY         ON", query.edit_message_text.await_args.kwargs["text"])
+        finally:
+            main.ADMIN_LOUNGE_ID = original_admin_lounge_id
+            main.relay_chats.clear()
+            main.relay_chats.update(original_relay_chats)
 
     async def test_groq_fallback_returns_text_on_success(self):
         """_groq_text_fallback should return response text when Groq responds OK."""
