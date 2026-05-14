@@ -44,3 +44,8 @@
 **Vulnerability:** The group authorization fallback in `main.py` appended new `AUTHORIZED_GROUPS` entries to the `.env` file without removing old ones, leading to file bloat and potential resource exhaustion.
 **Learning:** Fallback persistence mechanisms for configuration must be idempotent. Simple append-only strategies can cause degradation over time or accidental configuration corruption.
 **Prevention:** Always implement a read-modify-write pattern for configuration updates to ensure only one instance of a key exists, preserving the file's integrity and preventing resource leaks.
+
+## 2026-05-16 - GitHub Bot Authorization & Trigger Hardening
+**Vulnerability:** The GitHub webhook bot triggered expensive AI code reviews for any pull request event or comment containing broad keywords (like 'gemini'), regardless of the user's authorization status.
+**Learning:** Webhooks that trigger external API calls (especially LLMs) must verify the requester's identity or relationship to the project via `author_association` or similar metadata to prevent resource exhaustion and unauthorized access. broad keyword matching in communal contexts (issue comments) leads to accidental triggers.
+**Prevention:** Restrict webhook-triggered actions to trusted roles (e.g., `OWNER`, `MEMBER`, `COLLABORATOR`). Use specific command prefixes or mentions for manual triggers instead of generic substring matches.
