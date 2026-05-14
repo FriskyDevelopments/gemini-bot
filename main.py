@@ -1544,7 +1544,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.delete_message()
         return
 
-    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona"]:
+    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona", "toggle_sleep"]:
         if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
@@ -1557,6 +1557,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 dashboard_chats.add(chat_id)
                 await query.answer("🔮 Dashboard Mode ENABLED.")
             save_state()
+        elif query.data == "toggle_sleep":
+            global sleep_mode
+            sleep_mode = not sleep_mode
+            save_state()
+            status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
+            await query.answer(f"Sleep Mode is now {status}", show_alert=True)
         else:
             await query.answer()
 
@@ -1570,15 +1576,19 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", url=deploy_url)
 
+        dash_status = "🟢" if chat_id in dashboard_chats else "🔴"
+        anti_status = "🟢" if chat_id in antigravity_chats else "🔴"
+        sleep_status = "🟢" if sleep_mode else "🔴"
+
         keyboard = [
             [hub_btn],
             [InlineKeyboardButton("🪄 Arcanum Portal", url="https://arcanum.stixmagic.com"),
              InlineKeyboardButton("📦 Emoji Pack", url="https://t.me/addemoji/arcanum_magic_emojis_v3_by_stixsignal_bot")],
-            [InlineKeyboardButton("🔮 /dashmode", callback_data="cmd:dashmode"),
-             InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
+            [InlineKeyboardButton(f"{dash_status} /dashmode", callback_data="cmd:dashmode"),
+             InlineKeyboardButton(f"{anti_status} /antigravity", callback_data="cmd:antigravity")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
-            [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")],
+            [InlineKeyboardButton(f"{sleep_status} Sleep Mode", callback_data="toggle_sleep")],
             [CLOSE_BUTTON]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1586,6 +1596,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
         alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
         dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
+        sleep_mode_status = "ON" if sleep_mode else "—"
 
         console_text = (
             "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
@@ -1598,6 +1609,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  ANTIGRAVITY   {antigravity_mode}\n"
             f"  ALCHEMY       {alchemy_mode}\n"
             f"  DASHBOARD     {dashboard_mode}\n"
+            f"  SLEEP MODE    {sleep_mode_status}\n"
             "──────────────────────\n"
             "<b>REGISTRY</b>\n"
             f"  AUTH GROUPS   {len(auth_groups)}\n"
@@ -1848,13 +1860,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if query.data == "toggle_sleep":
-        global sleep_mode
-        sleep_mode = not sleep_mode
-        save_state()
-        status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
-        await query.answer(f"Sleep Mode is now {status}", show_alert=True)
-        return
 
     if query.data == "ping_bot_dead":
         username = update.effective_user.username or user_id
