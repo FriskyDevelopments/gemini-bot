@@ -10,6 +10,7 @@ import google.generativeai as genai
 app = Flask(__name__)
 
 GITHUB_WEBHOOK_SECRET = os.environ.get("GITHUB_WEBHOOK_SECRET")
+ALLOWED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 
 def verify_signature(data, signature):
     """Verify that the payload was sent from GitHub by validating SHA256."""
@@ -130,6 +131,11 @@ def github_webhook():
 
     # 1. Listen for new PRs or changes to a PR
     if event == "pull_request" and payload.get("action") in ["opened", "synchronize"]:
+        author_assoc = payload.get("pull_request", {}).get("author_association")
+        if author_assoc not in ALLOWED_ASSOCIATIONS:
+            print(f"Denying automated review: user association '{author_assoc}' not in {ALLOWED_ASSOCIATIONS}")
+            return jsonify({"status": "denied", "reason": "unauthorized"}), 200
+
         pr = payload["pull_request"]
         diff_url = pr["diff_url"]
         repo_full_name = payload["repository"]["full_name"]
@@ -139,8 +145,14 @@ def github_webhook():
 
     # 2. Listen for manual trigger via comments (@pupbot or /pupbot)
     elif event == "issue_comment" and payload.get("action") == "created":
+        author_assoc = payload.get("comment", {}).get("author_association")
+        if author_assoc not in ALLOWED_ASSOCIATIONS:
+            print(f"Denying manual review: user association '{author_assoc}' not in {ALLOWED_ASSOCIATIONS}")
+            return jsonify({"status": "denied", "reason": "unauthorized"}), 200
+
         comment_body = payload["comment"]["body"].lower()
-        if ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body or "@gemini" in comment_body or "gemini" in comment_body) and "pull_request" in payload["issue"]:
+        # Tighten keyword matching: removed generic 'gemini' substring match
+        if ("@pupbot review" in comment_body or "/pupbot" in comment_body or "/review" in comment_body or "@gemini" in comment_body) and "pull_request" in payload["issue"]:
             pr_number = payload["issue"]["number"]
             repo_full_name = payload["repository"]["full_name"]
             pr_api_url = payload["issue"]["pull_request"]["url"]
