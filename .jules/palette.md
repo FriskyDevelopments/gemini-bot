@@ -39,3 +39,7 @@
 ## 2026-06-07 - [Unified UI State & In-Place Updates]
 **Learning:** For complex admin interfaces, consolidating related callback handlers reduces state fragmentation and ensures a consistent visual experience. Using `edit_message_text` for toggles (like Dashboard Mode) creates a responsive, app-like feel.
 **Action:** Consolidate related UI flows into unified handlers and prioritize in-place message updates over sending new messages for state changes.
+
+## 2026-05-15 - [Real-time Status Visualization]
+**Learning:** In interactive dashboards, users need immediate visual confirmation of state changes. Consolidating toggle logic within the dashboard's render loop and adding 🟢/🔴 status indicators to both labels and buttons provides "Visibility of System Status" and makes the interface feel more responsive.
+**Action:** Use 🟢/🔴 indicators for boolean states in menus and ensure toggle actions trigger an immediate UI refresh of the parent menu.

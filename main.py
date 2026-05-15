@@ -1544,7 +1544,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.delete_message()
         return
 
-    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona"]:
+    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona", "toggle_sleep"]:
         if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
@@ -1557,6 +1557,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 dashboard_chats.add(chat_id)
                 await query.answer("🔮 Dashboard Mode ENABLED.")
             save_state()
+        elif query.data == "toggle_sleep":
+            global sleep_mode
+            sleep_mode = not sleep_mode
+            save_state()
+            status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
+            await query.answer(f"Sleep Mode is now {status}")
         else:
             await query.answer()
 
@@ -1570,22 +1576,26 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", url=deploy_url)
 
+        antigravity_status = "🟢 ON" if chat_id in antigravity_chats else "🔴 OFF"
+        alchemy_status = "🟢 ON" if chat_id in alchemy_chats else "🔴 OFF"
+        dashboard_status = "🟢 ON" if chat_id in dashboard_chats else "🔴 OFF"
+        sleep_status = "🟢 ON" if sleep_mode else "🔴 OFF"
+
+        dash_btn_text = f"🔮 Dashmode {'🟢' if chat_id in dashboard_chats else '🔴'}"
+        sleep_btn_text = f"💤 Sleep Mode {'🟢' if sleep_mode else '🔴'}"
+
         keyboard = [
             [hub_btn],
             [InlineKeyboardButton("🪄 Arcanum Portal", url="https://arcanum.stixmagic.com"),
              InlineKeyboardButton("📦 Emoji Pack", url="https://t.me/addemoji/arcanum_magic_emojis_v3_by_stixsignal_bot")],
-            [InlineKeyboardButton("🔮 /dashmode", callback_data="cmd:dashmode"),
+            [InlineKeyboardButton(dash_btn_text, callback_data="cmd:dashmode"),
              InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
-            [InlineKeyboardButton("💤 Sleep Mode", callback_data="toggle_sleep")],
+            [InlineKeyboardButton(sleep_btn_text, callback_data="toggle_sleep")],
             [CLOSE_BUTTON]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-
-        antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
-        alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
-        dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
 
         console_text = (
             "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
@@ -1595,9 +1605,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  ALPHA         <code>{ALPHA}</code>\n"
             "──────────────────────\n"
             "<b>MODES</b>\n"
-            f"  ANTIGRAVITY   {antigravity_mode}\n"
-            f"  ALCHEMY       {alchemy_mode}\n"
-            f"  DASHBOARD     {dashboard_mode}\n"
+            f"  ANTIGRAVITY   {antigravity_status}\n"
+            f"  ALCHEMY       {alchemy_status}\n"
+            f"  DASHBOARD     {dashboard_status}\n"
+            f"  SLEEP MODE    {sleep_status}\n"
             "──────────────────────\n"
             "<b>REGISTRY</b>\n"
             f"  AUTH GROUPS   {len(auth_groups)}\n"
@@ -1848,13 +1859,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    if query.data == "toggle_sleep":
-        global sleep_mode
-        sleep_mode = not sleep_mode
-        save_state()
-        status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
-        await query.answer(f"Sleep Mode is now {status}", show_alert=True)
-        return
 
     if query.data == "ping_bot_dead":
         username = update.effective_user.username or user_id
