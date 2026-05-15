@@ -1213,13 +1213,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-2.5-flash", system_instruction=active_system_prompt)
             
+            try:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception as chat_action_error:
+                logging.debug(f"Ignored chat action error: {chat_action_error}")
+
             prompt_list = [prompt]
             if getattr(update.message, 'photo', None):
                 photo_file = await context.bot.get_file(update.message.photo[-1].file_id)
                 img_bytes = await photo_file.download_as_bytearray()
                 prompt_list.append({"mime_type": "image/jpeg", "data": img_bytes})
                 
-            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             response = await model.generate_content_async(prompt_list)
             
             # Catch safety blocking
