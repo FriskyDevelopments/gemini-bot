@@ -1658,6 +1658,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e: logging.error(f"Send error: {e}")
         else:
             alchemy_chats.add(chat_id)
+            antigravity_chats.discard(chat_id)
+            admin_assistant_chats.discard(chat_id)
             save_state()
             await query.answer("🪄 Λlchemy Curator ONLINE.")
             try:
@@ -1708,6 +1710,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.error(f"Send error: {e}")
             else:
                 antigravity_chats.add(chat_id)
+                alchemy_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
                 save_state()
                 await query.answer("⚡ Antigravity Interface ONLINE.")
                 try:

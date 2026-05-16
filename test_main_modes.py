@@ -202,6 +202,59 @@ class TestMainModes(unittest.TestCase):
 
 
 class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.orig_antigravity = set(main.antigravity_chats)
+        self.orig_alchemy = set(main.alchemy_chats)
+        self.orig_admin_assistant = set(main.admin_assistant_chats)
+
+    async def asyncTearDown(self):
+        main.antigravity_chats.clear()
+        main.antigravity_chats.update(self.orig_antigravity)
+        main.alchemy_chats.clear()
+        main.alchemy_chats.update(self.orig_alchemy)
+        main.admin_assistant_chats.clear()
+        main.admin_assistant_chats.update(self.orig_admin_assistant)
+
+    async def test_callback_alchemy_clears_admin_assistant_mode(self):
+        chat_id = "-100111"
+        main.admin_assistant_chats.add(chat_id)
+
+        query = SimpleNamespace(
+            data="cmd:alchemy",
+            from_user=SimpleNamespace(id=123),
+            message=SimpleNamespace(chat=SimpleNamespace(id=chat_id, type="private")),
+            answer=AsyncMock(),
+        )
+        update = SimpleNamespace(callback_query=query)
+        context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
+             patch("main.save_state", return_value=None):
+            await main.callback_router(update, context)
+
+        self.assertIn(chat_id, main.alchemy_chats)
+        self.assertNotIn(chat_id, main.admin_assistant_chats)
+
+    async def test_callback_antigravity_clears_admin_assistant_mode(self):
+        chat_id = "-100111"
+        main.admin_assistant_chats.add(chat_id)
+
+        query = SimpleNamespace(
+            data="cmd:antigravity",
+            from_user=SimpleNamespace(id=123),
+            message=SimpleNamespace(chat=SimpleNamespace(id=chat_id, type="private")),
+            answer=AsyncMock(),
+        )
+        update = SimpleNamespace(callback_query=query)
+        context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
+             patch("main.save_state", return_value=None):
+            await main.callback_router(update, context)
+
+        self.assertIn(chat_id, main.antigravity_chats)
+        self.assertNotIn(chat_id, main.admin_assistant_chats)
+
     async def test_rules_reminder_broadcast_has_no_close_button(self):
         message = SimpleNamespace(
             text="Please remind the group of the rules",
