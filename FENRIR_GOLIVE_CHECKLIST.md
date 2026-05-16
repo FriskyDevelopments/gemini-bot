@@ -81,7 +81,7 @@ These are read by `main.py` today and must be set for full functionality:
 | `ADMIN_LOUNGE_ID` | Telegram chat ID of the admin group |
 | `MAIN_GROUP_ID` | Telegram chat ID of the main community group |
 | `AUTHORIZED_GROUPS` | Comma-separated chat IDs the bot responds in |
-| `ANTIGRAVITY_BYPASS_PASSWORD` | Password for the antigravity bypass flow (default: `ghost` — change for production) |
+| `ANTIGRAVITY_BYPASS_PASSWORD` | Password for the antigravity bypass flow (required to enable group bypass) |
 | `GROQ_API_KEY` | Groq LLM API key (used for AI replies) |
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `GITHUB_PUPBOT_TOKEN` | GitHub PAT for ticket/PR creation |
@@ -128,6 +128,6 @@ python3 -c "import os; print('FENRIR_STARS_PRICE:', os.getenv('FENRIR_STARS_PRIC
 | 1 | `FENRIR_PRIMARY_PAYMENT` and `FENRIR_STARS_PRICE` are **not read anywhere in `main.py`**. Stars payment handlers (`send_invoice`, `pre_checkout_query`, `successful_payment`) must be implemented. | 🔴 Critical |
 | 2 | `stripe` is **not in `requirements.txt`**. If Stripe is kept, install it and add webhook verification logic. | 🔴 Critical (if Stripe used) |
 | 3 | `pupbot.db` is **lost on restart** on ephemeral platforms. Mount a persistent volume at `/app/pupbot.db` before live traffic. | 🔴 Critical |
-| 4 | `ANTIGRAVITY_BYPASS_PASSWORD` defaults to `ghost`. Must be overridden with a strong secret before production. | 🟠 High |
+| 4 | `ANTIGRAVITY_BYPASS_PASSWORD` must be set to a strong secret before group bypass can be used in production. | 🟠 High |
 | 5 | `WEBHOOK_URL` must be set for cloud deployments. Without it, `run_polling()` is used and will conflict if multiple dynos/containers start. | 🟠 High |
 | 6 | Dockerfile `CMD` runs only `main.py` (Telegram bot). `github_bot.py` (Procfile `web:`) is not started. Decide: Docker-only or Procfile-based deployment? | 🟡 Medium |

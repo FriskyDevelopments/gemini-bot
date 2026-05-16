@@ -40,6 +40,7 @@ MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 groq_api_key = os.getenv("GROQ_API_KEY")
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN")
 ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD")
+ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE = "⚠️ <b>Antigravity bypass is unavailable.</b> The bypass password is not configured on this server. Ask an admin to set <code>ANTIGRAVITY_BYPASS_PASSWORD</code> before using group bypass."
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
 
@@ -975,6 +976,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             if update.message.chat.type != "private":
+                if not ANTIGRAVITY_BYPASS_PASSWORD:
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                    return
                 ticket_states[user_id] = "antigravity_bypass"
                 ticket_data[user_id] = {"target_chat_id": chat_id}
                 save_state()
@@ -1206,7 +1212,16 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except: pass
                     return
 
-                elif ANTIGRAVITY_BYPASS_PASSWORD and secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
+                elif not ANTIGRAVITY_BYPASS_PASSWORD:
+                    del ticket_states[user_id]
+                    ticket_data.pop(user_id, None)
+                    save_state()
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                    return
+
+                elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     target_chat = ticket_data.get(user_id, {}).get("target_chat_id", chat_id)
                     antigravity_chats.add(target_chat)
                     if target_chat in alchemy_chats: alchemy_chats.remove(target_chat)
@@ -1681,6 +1696,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e: logging.error(f"Send error: {e}")
         else:
             if query.message.chat.type != "private":
+                if not ANTIGRAVITY_BYPASS_PASSWORD:
+                    await query.answer("Antigravity bypass password is not configured.", show_alert=True)
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.error(f"Send error: {e}")
+                    return
                 ticket_states[user_id] = "antigravity_bypass"
                 save_state()
                 await query.answer()

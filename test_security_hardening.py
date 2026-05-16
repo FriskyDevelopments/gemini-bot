@@ -14,6 +14,7 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         self.orig_invitations = dict(main.invitations)
         self.orig_banned_words = set(main.BANNED_WORDS)
         self.orig_alpha_user_id = main.ALPHA
+        self.orig_antigravity_bypass_password = main.ANTIGRAVITY_BYPASS_PASSWORD
 
         main.BANNED_WORDS = {"spamword"}
         main.invitations = {"12345": "InviterName"}
@@ -27,6 +28,7 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         main.invitations = self.orig_invitations
         main.BANNED_WORDS = self.orig_banned_words
         main.ALPHA = self.orig_alpha_user_id
+        main.ANTIGRAVITY_BYPASS_PASSWORD = self.orig_antigravity_bypass_password
 
     async def test_spam_detection_logic(self):
         # Setup mock update and context
@@ -124,6 +126,92 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         calls = [call.kwargs.get('chat_id') for call in context.bot.send_message.call_args_list]
         self.assertIn("group_123", calls)
         self.assertIn(user_id, calls)
+
+    async def test_antigravity_group_request_requires_configured_bypass_password(self):
+        user_id = "999"
+        main.ANTIGRAVITY_BYPASS_PASSWORD = None
+
+        mock_msg = AsyncMock()
+        mock_msg.text = "/antigravity"
+        mock_msg.new_chat_members = None
+        mock_msg.chat.type = "supergroup"
+        mock_msg.from_user.id = int(user_id)
+
+        update = MagicMock()
+        update.message = mock_msg
+        update.effective_message = mock_msg
+        update.effective_user = mock_msg.from_user
+        update.effective_chat.id = 111
+
+        context = MagicMock()
+        context.bot.send_message = AsyncMock()
+
+        with patch('main.is_alpha_user', new=AsyncMock(return_value=True)), \
+             patch('main.save_state'):
+            await main.lounge_host(update, context)
+
+        self.assertNotIn(user_id, main.ticket_states)
+        self.assertNotIn(user_id, main.ticket_data)
+        context.bot.send_message.assert_called_once()
+        sent_text = context.bot.send_message.call_args.kwargs.get('text', '')
+        self.assertIn("bypass password is not configured", sent_text)
+
+    async def test_antigravity_stale_bypass_state_reports_missing_configuration(self):
+        user_id = "555"
+        main.ticket_states[user_id] = "antigravity_bypass"
+        main.ticket_data[user_id] = {"target_chat_id": "group_123"}
+        main.ANTIGRAVITY_BYPASS_PASSWORD = None
+
+        mock_msg = AsyncMock()
+        mock_msg.text = "secretpassword"
+        mock_msg.new_chat_members = None
+        mock_msg.chat.type = "private"
+        mock_msg.from_user.id = int(user_id)
+
+        update = MagicMock()
+        update.message = mock_msg
+        update.effective_message = mock_msg
+        update.effective_user = mock_msg.from_user
+        update.effective_chat.id = user_id
+
+        context = MagicMock()
+        context.bot.send_message = AsyncMock()
+
+        with patch('main.save_state'):
+            await main.lounge_host(update, context)
+
+        self.assertNotIn(user_id, main.ticket_states)
+        self.assertNotIn(user_id, main.ticket_data)
+        sent_text = context.bot.send_message.call_args.kwargs.get('text', '')
+        self.assertIn("bypass password is not configured", sent_text)
+        self.assertNotIn("Incorrect bypass password", sent_text)
+
+    async def test_antigravity_callback_group_request_requires_configured_bypass_password(self):
+        user_id = "999"
+        chat_id = "111"
+        main.ANTIGRAVITY_BYPASS_PASSWORD = None
+
+        query = MagicMock()
+        query.data = "cmd:antigravity"
+        query.from_user.id = int(user_id)
+        query.message.chat.id = int(chat_id)
+        query.message.chat.type = "supergroup"
+        query.answer = AsyncMock()
+
+        update = MagicMock()
+        update.callback_query = query
+
+        context = MagicMock()
+        context.bot.send_message = AsyncMock()
+
+        with patch('main.is_alpha_user', new=AsyncMock(return_value=True)), \
+             patch('main.save_state'):
+            await main.callback_router(update, context)
+
+        self.assertNotIn(user_id, main.ticket_states)
+        query.answer.assert_called_once_with("Antigravity bypass password is not configured.", show_alert=True)
+        sent_text = context.bot.send_message.call_args.kwargs.get('text', '')
+        self.assertIn("bypass password is not configured", sent_text)
 
 if __name__ == "__main__":
     unittest.main()
