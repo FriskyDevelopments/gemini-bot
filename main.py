@@ -1602,26 +1602,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  ALPHA         <code>{ALPHA}</code>\n"
             "──────────────────────\n"
             "<b>MODES</b>\n"
-            f"  ANTIGRAVITY   {antigravity_status} ON" if chat_id in antigravity_chats else f"  ANTIGRAVITY   {antigravity_status} OFF",
-            f"  ALCHEMY       {alchemy_status} ON" if chat_id in alchemy_chats else f"  ALCHEMY       {alchemy_status} OFF",
-            f"  DASHBOARD     {dashboard_status} ON" if chat_id in dashboard_chats else f"  DASHBOARD     {dashboard_status} OFF",
-            f"  SLEEP MODE    {sleep_status} ON" if sleep_mode else f"  SLEEP MODE    {sleep_status} OFF",
-            "──────────────────────\n"
-            "<b>REGISTRY</b>\n"
-            f"  AUTH GROUPS   {len(auth_groups)}\n"
-            f"  DEBUGGERS     {len(debuggers)}\n"
-            "──────────────────────\n"
-            "<i>⚡ All systems nominal.</i>"
-        )
-        # Fix the console_text list to string conversion if needed, but let's just make it a string directly.
-        console_text = (
-            "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
-            "──────────────────────\n"
-            f"  PERSONA       {active_persona}\n"
-            f"  BUILD         v137 · Apr 2026\n"
-            f"  ALPHA         <code>{ALPHA}</code>\n"
-            "──────────────────────\n"
-            "<b>MODES</b>\n"
             f"  ANTIGRAVITY   {antigravity_status} {'ON' if chat_id in antigravity_chats else 'OFF'}\n"
             f"  ALCHEMY       {alchemy_status} {'ON' if chat_id in alchemy_chats else 'OFF'}\n"
             f"  DASHBOARD     {dashboard_status} {'ON' if chat_id in dashboard_chats else 'OFF'}\n"
@@ -1641,6 +1621,28 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text=console_text, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
                 logging.error(f"Alpha Console display error: {e}")
+        return
+
+    if query.data == "cmd:admin_assistant":
+        if not await is_alpha_user(context, user_id):
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        if chat_id in admin_assistant_chats:
+            admin_assistant_chats.remove(chat_id)
+            save_state()
+            await query.answer("🧭 Admin Assistant OFF.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e: logging.error(f"Send error: {e}")
+        else:
+            admin_assistant_chats.add(chat_id)
+            antigravity_chats.discard(chat_id)
+            alchemy_chats.discard(chat_id)
+            save_state()
+            await query.answer("🧭 Admin Assistant ONLINE.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e: logging.error(f"Send error: {e}")
         return
 
     if query.data == "cmd:alchemy":
@@ -1711,6 +1713,26 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.error(f"Send error: {e}")
+        return
+
+    if query.data == "cmd:relay":
+        if str(chat_id) != str(ADMIN_LOUNGE_ID) and not await is_alpha_user(context, user_id):
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        if chat_id in relay_chats:
+            relay_chats.remove(chat_id)
+            save_state()
+            await query.answer("📡 Relay Mode OFF.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML")
+            except Exception as e: logging.error(f"Send error: {e}")
+        else:
+            relay_chats.add(chat_id)
+            save_state()
+            await query.answer("📡 Relay Mode ON.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML")
+            except Exception as e: logging.error(f"Send error: {e}")
         return
 
     if query.data == "cmd:ping":
