@@ -222,8 +222,9 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         query = SimpleNamespace(
             data="cmd:alchemy",
             from_user=SimpleNamespace(id=123),
-            message=SimpleNamespace(chat=SimpleNamespace(id=chat_id, type="private")),
+            message=SimpleNamespace(chat=SimpleNamespace(id=chat_id, type="private"), text="◈ PUPSONA // ALPHA CONSOLE"),
             answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
         )
         update = SimpleNamespace(callback_query=query)
         context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
@@ -234,6 +235,8 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn(chat_id, main.alchemy_chats)
         self.assertNotIn(chat_id, main.admin_assistant_chats)
+        query.edit_message_text.assert_awaited_once()
+        self.assertIn("ALCHEMY       🟢 ON", query.edit_message_text.call_args.kwargs["text"])
 
     async def test_callback_antigravity_clears_admin_assistant_mode(self):
         chat_id = "-100111"
@@ -242,8 +245,9 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         query = SimpleNamespace(
             data="cmd:antigravity",
             from_user=SimpleNamespace(id=123),
-            message=SimpleNamespace(chat=SimpleNamespace(id=chat_id, type="private")),
+            message=SimpleNamespace(chat=SimpleNamespace(id=chat_id, type="private"), text="◈ PUPSONA // ALPHA CONSOLE"),
             answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
         )
         update = SimpleNamespace(callback_query=query)
         context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
@@ -254,6 +258,8 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn(chat_id, main.antigravity_chats)
         self.assertNotIn(chat_id, main.admin_assistant_chats)
+        query.edit_message_text.assert_awaited_once()
+        self.assertIn("ANTIGRAVITY   🟢 ON", query.edit_message_text.call_args.kwargs["text"])
 
     async def test_rules_reminder_broadcast_has_no_close_button(self):
         message = SimpleNamespace(

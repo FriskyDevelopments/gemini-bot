@@ -1548,7 +1548,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.delete_message()
         return
 
-    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona", "toggle_sleep"]:
+    message_text = getattr(query.message, "text", "") or ""
+    is_alpha_console = "PUPSONA // ALPHA CONSOLE" in message_text
+    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona", "toggle_sleep"] or (is_alpha_console and query.data in ["cmd:alchemy", "cmd:antigravity"]):
         if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
@@ -1567,6 +1569,34 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_state()
             status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
             await query.answer(f"Sleep Mode is now {status}")
+        elif query.data == "cmd:alchemy":
+            if chat_id in alchemy_chats:
+                alchemy_chats.remove(chat_id)
+                await query.answer("🪄 Λlchemy Curator Deactivated.")
+            else:
+                alchemy_chats.add(chat_id)
+                antigravity_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
+                await query.answer("🪄 Λlchemy Curator ONLINE.")
+            save_state()
+        elif query.data == "cmd:antigravity":
+            if chat_id in antigravity_chats:
+                antigravity_chats.remove(chat_id)
+                save_state()
+                await query.answer("🔄 Antigravity Mode Deactivated.")
+            elif query.message.chat.type != "private":
+                ticket_states[user_id] = "antigravity_bypass"
+                save_state()
+                await query.answer()
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter Emoji Spring to summon Antigravity into this communal chat:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                except Exception as e: logging.error(f"Send error: {e}")
+            else:
+                antigravity_chats.add(chat_id)
+                alchemy_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
+                save_state()
+                await query.answer("⚡ Antigravity Interface ONLINE.")
         else:
             await query.answer()
 
