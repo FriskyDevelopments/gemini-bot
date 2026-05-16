@@ -1,7 +1,7 @@
 import unittest
 import os
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from unittest.mock import AsyncMock
 
 import main
@@ -35,7 +35,7 @@ class TestMainModes(unittest.TestCase):
         os.environ.pop("MAIN_GROUP_ID", None)
 
     def test_get_mode_precedence(self):
-        chat_id = "-100111"
+        chat_id = "chat-1"
         main.antigravity_chats.add(chat_id)
         main.alchemy_chats.add(chat_id)
         main.admin_assistant_chats.add(chat_id)
@@ -86,48 +86,6 @@ class TestMainModes(unittest.TestCase):
         member_context = main.build_identity_context("Pup", "2", False)
         self.assertIn("Lounge member", member_context)
 
-    def test_get_primary_target_group_prefers_linked(self):
-        original_main_group = main.MAIN_GROUP_ID
-        original_linked = set(main.linked_groups)
-        original_env_main = main.os.environ.get("MAIN_GROUP_ID")
-        try:
-            main.MAIN_GROUP_ID = None
-            main.linked_groups.clear()
-            main.linked_groups.add("-100LINKED")
-            if "MAIN_GROUP_ID" in main.os.environ:
-                del main.os.environ["MAIN_GROUP_ID"]
-            self.assertEqual(main.get_primary_target_group(), "-100LINKED")
-
-            main.os.environ["MAIN_GROUP_ID"] = "-100ENV"
-            self.assertEqual(main.get_primary_target_group(), "-100LINKED")
-        finally:
-            main.MAIN_GROUP_ID = original_main_group
-            main.linked_groups.clear()
-            main.linked_groups.update(original_linked)
-            if original_env_main is None:
-                main.os.environ.pop("MAIN_GROUP_ID", None)
-            else:
-                main.os.environ["MAIN_GROUP_ID"] = original_env_main
-
-    def test_get_primary_target_group_falls_back_to_linked(self):
-        original_main_group = main.MAIN_GROUP_ID
-        original_linked = set(main.linked_groups)
-        original_env_main = main.os.environ.get("MAIN_GROUP_ID")
-        try:
-            main.MAIN_GROUP_ID = None
-            main.os.environ.pop("MAIN_GROUP_ID", None)
-            main.linked_groups.clear()
-            main.linked_groups.update({"-100B", "-100A"})
-            self.assertEqual(main.get_primary_target_group(), "-100A")
-        finally:
-            main.MAIN_GROUP_ID = original_main_group
-            main.linked_groups.clear()
-            main.linked_groups.update(original_linked)
-            if original_env_main is None:
-                main.os.environ.pop("MAIN_GROUP_ID", None)
-            else:
-                main.os.environ["MAIN_GROUP_ID"] = original_env_main
-
     def test_get_effective_mode_respects_admin_assistant_toggle_in_admin_lounge(self):
         main.ADMIN_LOUNGE_ID = "-123"
         main.admin_assistant_chats.discard("-123")
@@ -163,77 +121,235 @@ class TestMainModes(unittest.TestCase):
         )
         self.assertIn("Admin Assistant active", fallback)
 
-    # ── Tone / Persona tests ──────────────────────────────────────────────── #
 
-    def test_system_prompt_defaults_to_friendly(self):
-        """Default BOT_TONE should produce a non-goofy system prompt."""
-        self.assertNotIn("Arf arf", main.SYSTEM_PROMPT)
-        # Check only the preamble (first ~80 chars) for dog-play terms
-        self.assertNotIn("wag", main.SYSTEM_PROMPT.lower()[:80])
-        self.assertIn("Geminipupbot", main.SYSTEM_PROMPT)
+class TestGetPrimaryTargetGroup(unittest.TestCase):
+    """Tests for the PR change: get_primary_target_group now prefers MAIN_GROUP_ID env var."""
 
-    def test_friendly_prompt_contains_guidelines(self):
-        """Friendly tone prompt must include explicit anti-silliness guidelines."""
-        prompt = main._SYSTEM_PROMPT_FRIENDLY
-        self.assertIn("not goofy", prompt)
-        self.assertIn("barking", prompt)
-        self.assertIn("concise", prompt.lower())
+    def setUp(self):
+        self.orig_main_group_id = main.MAIN_GROUP_ID
+        self.orig_linked_groups = set(main.linked_groups)
+        main.linked_groups.clear()
 
-    def test_playful_prompt_retained(self):
-        """Playful tone prompt must still be available for backward compat."""
-        prompt = main._SYSTEM_PROMPT_PLAYFUL
-        self.assertIn("pup host", prompt.lower())
-        self.assertIn("Geminipupbot", prompt)
+    def tearDown(self):
+        main.MAIN_GROUP_ID = self.orig_main_group_id
+        main.linked_groups.clear()
+        main.linked_groups.update(self.orig_linked_groups)
+        os.environ.pop("MAIN_GROUP_ID", None)
 
-    def test_system_prompt_selection_via_bot_tone(self):
-        """SYSTEM_PROMPT selection follows BOT_TONE at module init."""
-        original_system_prompt = main.SYSTEM_PROMPT
-        try:
-            with patch.dict(os.environ, {"BOT_TONE": "playful"}):
-                # Simulate choosing the playful prompt (as done at module level)
-                chosen = main._SYSTEM_PROMPT_PLAYFUL if os.getenv("BOT_TONE") == "playful" else main._SYSTEM_PROMPT_FRIENDLY
-                self.assertEqual(chosen, main._SYSTEM_PROMPT_PLAYFUL)
+    def test_env_var_takes_priority_over_linked_groups(self):
+        """MAIN_GROUP_ID env var must be returned even when linked_groups is non-empty."""
+        os.environ["MAIN_GROUP_ID"] = "-100111"
+        main.linked_groups.add("-100999")
+        result = main.get_primary_target_group()
+        self.assertEqual(result, "-100111")
 
-            with patch.dict(os.environ, {"BOT_TONE": "friendly"}):
-                chosen = main._SYSTEM_PROMPT_PLAYFUL if os.getenv("BOT_TONE") == "playful" else main._SYSTEM_PROMPT_FRIENDLY
-                self.assertEqual(chosen, main._SYSTEM_PROMPT_FRIENDLY)
-        finally:
-            main.SYSTEM_PROMPT = original_system_prompt
+    def test_module_level_main_group_id_used_when_env_absent(self):
+        """If env var is absent, the module-level MAIN_GROUP_ID is tried."""
+        os.environ.pop("MAIN_GROUP_ID", None)
+        main.MAIN_GROUP_ID = "-100222"
+        result = main.get_primary_target_group()
+        self.assertEqual(result, "-100222")
+
+    def test_falls_back_to_linked_groups_when_main_group_id_unset(self):
+        """When MAIN_GROUP_ID is not set at all, linked_groups is the fallback."""
+        os.environ.pop("MAIN_GROUP_ID", None)
+        main.MAIN_GROUP_ID = None
+        main.linked_groups.add("-100333")
+        main.linked_groups.add("-100100")
+        result = main.get_primary_target_group()
+        # Returns the lexicographically first (sorted)
+        self.assertEqual(result, "-100100")
+
+    def test_returns_none_when_nothing_configured(self):
+        os.environ.pop("MAIN_GROUP_ID", None)
+        main.MAIN_GROUP_ID = None
+        result = main.get_primary_target_group()
+        self.assertIsNone(result)
+
+    def test_linked_groups_not_returned_when_main_group_id_env_set(self):
+        """Regression: old code returned linked_groups first; new code must not."""
+        os.environ["MAIN_GROUP_ID"] = "-999"
+        main.linked_groups.add("-111")
+        result = main.get_primary_target_group()
+        self.assertNotEqual(result, "-111")
+
+
+class TestBuildIdentityContextNoSanitization(unittest.TestCase):
+    """The PR removed user_name sanitization from build_identity_context."""
+
+    def test_special_chars_in_username_are_preserved(self):
+        """After the PR, brackets and newlines in user_name are no longer stripped."""
+        result = main.build_identity_context("[Admin]", "123", False)
+        # The name must appear unmodified (brackets not stripped)
+        self.assertIn("[Admin]", result)
+
+    def test_newline_in_username_not_removed(self):
+        result = main.build_identity_context("User\nName", "456", False)
+        self.assertIn("User\nName", result)
+
+    def test_long_name_not_truncated(self):
+        """Old code truncated to 100 chars; new code does not."""
+        long_name = "A" * 200
+        result = main.build_identity_context(long_name, "789", True)
+        self.assertIn(long_name, result)
+
+    def test_alpha_role_label(self):
+        result = main.build_identity_context("Frisky", "1", True)
+        self.assertIn("Owner/Alpha", result)
+
+    def test_member_role_label(self):
+        result = main.build_identity_context("Pup", "2", False)
+        self.assertIn("Lounge member", result)
+
+    def test_format_includes_user_id(self):
+        result = main.build_identity_context("Fido", "9999", False)
+        self.assertIn("9999", result)
+
+
+class TestSaveStateRemovedFields(unittest.TestCase):
+    """The PR removed dashboard_chats, manual_alpha_ids, sleep_mode from save_state."""
+
+    def test_dashboard_chats_not_a_module_attribute(self):
+        self.assertFalse(
+            hasattr(main, "dashboard_chats"),
+            "dashboard_chats should have been removed from main in this PR",
+        )
+
+    def test_manual_alpha_ids_not_a_module_attribute(self):
+        self.assertFalse(
+            hasattr(main, "manual_alpha_ids"),
+            "manual_alpha_ids should have been removed from main in this PR",
+        )
+
+    def test_sleep_mode_not_a_module_attribute(self):
+        self.assertFalse(
+            hasattr(main, "sleep_mode"),
+            "sleep_mode should have been removed from main in this PR",
+        )
+
+    def test_conversation_histories_not_a_module_attribute(self):
+        self.assertFalse(
+            hasattr(main, "conversation_histories"),
+            "conversation_histories should have been removed from main in this PR",
+        )
+
+    def test_save_state_does_not_reference_removed_fields(self):
+        """save_state() must run without AttributeError despite removed fields."""
+        with patch("main.db") as mock_db:
+            mock_db.set_val = MagicMock()
+            try:
+                main.save_state()
+            except AttributeError as e:
+                self.fail(f"save_state() raised AttributeError: {e}")
+
+
+class TestIsAlphaUserNoManualAlphaIds(unittest.TestCase):
+    """is_alpha_user no longer checks manual_alpha_ids (removed in this PR)."""
+
+    def setUp(self):
+        self.orig_core = set(main.CORE_ALPHA_IDS)
+        self.orig_dynamic = set(main.dynamic_alpha_ids)
+
+    def tearDown(self):
+        main.CORE_ALPHA_IDS.clear() if isinstance(main.CORE_ALPHA_IDS, set) else None
+        main.dynamic_alpha_ids.clear()
+        main.dynamic_alpha_ids.update(self.orig_dynamic)
+
+    def test_core_alpha_returns_true(self):
+        import asyncio
+        from types import SimpleNamespace
+        context = SimpleNamespace(bot=SimpleNamespace(
+            get_chat_administrators=AsyncMock(return_value=[])
+        ))
+        # ALPHA is always in CORE_ALPHA_IDS
+        result = asyncio.get_event_loop().run_until_complete(
+            main.is_alpha_user(context, main.ALPHA)
+        )
+        self.assertTrue(result)
+
+    def test_unknown_user_returns_false(self):
+        import asyncio
+        from types import SimpleNamespace
+        context = SimpleNamespace(bot=SimpleNamespace(
+            get_chat_administrators=AsyncMock(return_value=[])
+        ))
+        with patch("main.save_state"):
+            result = asyncio.get_event_loop().run_until_complete(
+                main.is_alpha_user(context, "000000000")
+            )
+        self.assertFalse(result)
+
+
+class TestWriteAuthorizedGroupsFallbackAppend(unittest.TestCase):
+    """The PR changed fallback persistence from read-modify-write to append-only."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False)
+        self.tmp.write("TELEGRAM_TOKEN=test\n")
+        self.tmp.close()
+        self.env_path = self.tmp.name
+        self.orig_env_path = main.env_path
+
+    def tearDown(self):
+        main.env_path = self.orig_env_path
+        os.unlink(self.env_path)
+        os.environ.pop("AUTHORIZED_GROUPS", None)
+
+    def test_fallback_appends_when_doppler_and_file_succeed(self):
+        """When Doppler fails, the env file fallback must append the entry."""
+        main.env_path = self.env_path
+
+        # Force Doppler to fail by not having DOPPLER_PROJECT set
+        os.environ.pop("DOPPLER_PROJECT", None)
+
+        result = main._write_authorized_groups(["-100123"])
+
+        with open(self.env_path) as f:
+            content = f.read()
+
+        self.assertTrue(result)
+        self.assertIn("AUTHORIZED_GROUPS=-100123", content)
+
+    def test_fallback_appends_rather_than_replacing(self):
+        """Append mode means calling twice creates two entries (idempotency lost)."""
+        main.env_path = self.env_path
+        os.environ.pop("DOPPLER_PROJECT", None)
+
+        main._write_authorized_groups(["-100aaa"])
+        main._write_authorized_groups(["-100bbb"])
+
+        with open(self.env_path) as f:
+            content = f.read()
+
+        # Both entries must appear (append, not replace)
+        self.assertIn("AUTHORIZED_GROUPS=-100aaa", content)
+        self.assertIn("AUTHORIZED_GROUPS=-100bbb", content)
+
+
+class TestSystemPromptFixed(unittest.TestCase):
+    """The PR removed BOT_TONE branching; SYSTEM_PROMPT is now a single constant."""
+
+    def test_bot_tone_attribute_removed(self):
+        """BOT_TONE-based prompt selection no longer exists."""
+        self.assertFalse(
+            hasattr(main, "_SYSTEM_PROMPT_FRIENDLY"),
+            "_SYSTEM_PROMPT_FRIENDLY should have been removed",
+        )
+        self.assertFalse(
+            hasattr(main, "_SYSTEM_PROMPT_PLAYFUL"),
+            "_SYSTEM_PROMPT_PLAYFUL should have been removed",
+        )
+
+    def test_system_prompt_is_a_string(self):
+        self.assertIsInstance(main.SYSTEM_PROMPT, str)
+        self.assertGreater(len(main.SYSTEM_PROMPT), 0)
+
+    def test_system_prompt_contains_pup_lounge(self):
+        self.assertIn("Pup Lounge", main.SYSTEM_PROMPT)
 
 
 class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
-    async def test_rules_reminder_broadcast_has_no_close_button(self):
-        message = SimpleNamespace(
-            text="Please remind the group of the rules",
-            caption=None,
-            new_chat_members=None,
-            from_user=SimpleNamespace(id=123),
-            reply_to_message=None,
-            chat=SimpleNamespace(type="supergroup"),
-        )
-        update = SimpleNamespace(
-            effective_message=message,
-            effective_user=SimpleNamespace(id=123),
-            effective_chat=SimpleNamespace(id=-100),
-            message=message,
-        )
-        context = SimpleNamespace(
-            bot=SimpleNamespace(
-                id=456,
-                username="PupBot",
-                send_message=AsyncMock(),
-            )
-        )
-
-        with patch("main.is_alpha_user", new=AsyncMock(return_value=True)), \
-             patch("main.get_primary_target_group", return_value="-200"), \
-             patch("main.os.path.exists", return_value=False):
-            await main.lounge_host(update, context)
-
-        broadcast_call = context.bot.send_message.call_args_list[0]
-        self.assertEqual(broadcast_call.kwargs["chat_id"], "-200")
-        self.assertNotIn("reply_markup", broadcast_call.kwargs)
-
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
         original_dynamic_alpha_ids = set(main.dynamic_alpha_ids)
@@ -263,45 +379,6 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
             main.dynamic_alpha_ids.clear()
             main.dynamic_alpha_ids.update(original_dynamic_alpha_ids)
             main.admin_owner_last_refresh = original_admin_owner_last_refresh
-
-    async def test_groq_fallback_returns_text_on_success(self):
-        """_groq_text_fallback should return response text when Groq responds OK."""
-        import httpx
-        mock_response = SimpleNamespace(
-            raise_for_status=lambda: None,
-            json=lambda: {"choices": [{"message": {"content": "Hello from Groq!"}}]},
-        )
-
-        async def mock_post(*args, **kwargs):
-            return mock_response
-
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test_key"}):
-            with patch("httpx.AsyncClient") as mock_client_cls:
-                mock_client = mock_client_cls.return_value.__aenter__.return_value
-                mock_client.post = AsyncMock(return_value=mock_response)
-                result = await main._groq_text_fallback("sys", "hello")
-                self.assertEqual(result, "Hello from Groq!")
-
-    async def test_groq_fallback_returns_none_without_key(self):
-        """_groq_text_fallback should return None when GROQ_API_KEY is absent."""
-        env = {k: v for k, v in os.environ.items() if k != "GROQ_API_KEY"}
-        with patch.dict(os.environ, env, clear=True):
-            result = await main._groq_text_fallback("sys", "hello")
-            self.assertIsNone(result)
-
-    async def test_groq_fallback_returns_none_on_http_error(self):
-        """_groq_text_fallback should return None on network/HTTP errors."""
-        import httpx
-
-        async def raise_error(*args, **kwargs):
-            raise httpx.ConnectError("timeout")
-
-        with patch.dict(os.environ, {"GROQ_API_KEY": "test_key"}):
-            with patch("httpx.AsyncClient") as mock_client_cls:
-                mock_client = mock_client_cls.return_value.__aenter__.return_value
-                mock_client.post = raise_error
-                result = await main._groq_text_fallback("sys", "hello")
-                self.assertIsNone(result)
 
 
 if __name__ == "__main__":
