@@ -39,7 +39,7 @@ MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN")
-ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
+ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD")
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
 
@@ -695,7 +695,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"👋 Welcome to the Haus of Howl, {html.escape(member.first_name)}! I'm your host. Tap <b>Open Menu</b> to see available commands.",
+                    text=f"👋 Welcome to the Haus of Howl, {html.escape(member.first_name or 'New Member')}! I'm your host. Tap <b>Open Menu</b> to see available commands.",
                     parse_mode="HTML",
                     reply_markup=reply_markup
                 )
@@ -1206,7 +1206,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except: pass
                     return
 
-                elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
+                elif ANTIGRAVITY_BYPASS_PASSWORD and secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     target_chat = ticket_data.get(user_id, {}).get("target_chat_id", chat_id)
                     antigravity_chats.add(target_chat)
                     if target_chat in alchemy_chats: alchemy_chats.remove(target_chat)
@@ -1305,7 +1305,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = full_text.lower()
         if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
             spammer = update.effective_user
-            spammer_name = html.escape(spammer.username or spammer.first_name)
+            spammer_name = html.escape(spammer.username or spammer.first_name or "Unknown")
             inviter = html.escape(invitations.get(str(spammer.id), "Unknown / Join Link"))
             safe_msg = html.escape(full_text[:500])
             
