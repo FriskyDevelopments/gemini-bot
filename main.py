@@ -185,17 +185,21 @@ MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
         InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
     ],
     [
-        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard"),
-        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket")
+        InlineKeyboardButton("🧭 /admin_assistant", callback_data="cmd:admin_assistant"),
+        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard")
     ],
     [
-        InlineKeyboardButton("📡 /ping", callback_data="cmd:ping")
+        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket"),
+        InlineKeyboardButton("🛰️ /ping", callback_data="cmd:ping")
+    ],
+    [
+        InlineKeyboardButton("📡 /relay", callback_data="cmd:relay"),
+        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
     ],
     [
         InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
-        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
-    ],
-    [CLOSE_BUTTON]
+        CLOSE_BUTTON
+    ]
 ])
 
 TICKET_PROJECT_KEYBOARD = InlineKeyboardMarkup([
@@ -1571,28 +1575,21 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
         deploy_url = "https://security.friskydev.com"
 
-        if query.message.chat.type == "private":
-            hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", web_app=WebAppInfo(url=deploy_url))
-        else:
-            hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", url=deploy_url)
+        hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", web_app=WebAppInfo(url=deploy_url)) if query.message.chat.type == "private" else InlineKeyboardButton("🛡️ Security Dashboard", url=deploy_url)
 
-        antigravity_status = "🟢 ON" if chat_id in antigravity_chats else "🔴 OFF"
-        alchemy_status = "🟢 ON" if chat_id in alchemy_chats else "🔴 OFF"
-        dashboard_status = "🟢 ON" if chat_id in dashboard_chats else "🔴 OFF"
-        sleep_status = "🟢 ON" if sleep_mode else "🔴 OFF"
-
-        dash_btn_text = f"🔮 Dashmode {'🟢' if chat_id in dashboard_chats else '🔴'}"
-        sleep_btn_text = f"💤 Sleep Mode {'🟢' if sleep_mode else '🔴'}"
+        antigravity_status = "🟢" if chat_id in antigravity_chats else "🔴"
+        alchemy_status = "🟢" if chat_id in alchemy_chats else "🔴"
+        dashboard_status = "🟢" if chat_id in dashboard_chats else "🔴"
+        sleep_status = "🟢" if sleep_mode else "🔴"
 
         keyboard = [
             [hub_btn],
-            [InlineKeyboardButton("🪄 Arcanum Portal", url="https://arcanum.stixmagic.com"),
-             InlineKeyboardButton("📦 Emoji Pack", url="https://t.me/addemoji/arcanum_magic_emojis_v3_by_stixsignal_bot")],
-            [InlineKeyboardButton(dash_btn_text, callback_data="cmd:dashmode"),
-             InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
+            [InlineKeyboardButton(f"🪄 Alchemy {alchemy_status}", callback_data="cmd:alchemy"),
+             InlineKeyboardButton(f"⚡ Antigravity {antigravity_status}", callback_data="cmd:antigravity")],
+            [InlineKeyboardButton(f"🔮 Dashmode {dashboard_status}", callback_data="cmd:dashmode"),
+             InlineKeyboardButton(f"💤 Sleep Mode {sleep_status}", callback_data="toggle_sleep")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
-            [InlineKeyboardButton(sleep_btn_text, callback_data="toggle_sleep")],
             [CLOSE_BUTTON]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1605,10 +1602,30 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  ALPHA         <code>{ALPHA}</code>\n"
             "──────────────────────\n"
             "<b>MODES</b>\n"
-            f"  ANTIGRAVITY   {antigravity_status}\n"
-            f"  ALCHEMY       {alchemy_status}\n"
-            f"  DASHBOARD     {dashboard_status}\n"
-            f"  SLEEP MODE    {sleep_status}\n"
+            f"  ANTIGRAVITY   {antigravity_status} ON" if chat_id in antigravity_chats else f"  ANTIGRAVITY   {antigravity_status} OFF",
+            f"  ALCHEMY       {alchemy_status} ON" if chat_id in alchemy_chats else f"  ALCHEMY       {alchemy_status} OFF",
+            f"  DASHBOARD     {dashboard_status} ON" if chat_id in dashboard_chats else f"  DASHBOARD     {dashboard_status} OFF",
+            f"  SLEEP MODE    {sleep_status} ON" if sleep_mode else f"  SLEEP MODE    {sleep_status} OFF",
+            "──────────────────────\n"
+            "<b>REGISTRY</b>\n"
+            f"  AUTH GROUPS   {len(auth_groups)}\n"
+            f"  DEBUGGERS     {len(debuggers)}\n"
+            "──────────────────────\n"
+            "<i>⚡ All systems nominal.</i>"
+        )
+        # Fix the console_text list to string conversion if needed, but let's just make it a string directly.
+        console_text = (
+            "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
+            "──────────────────────\n"
+            f"  PERSONA       {active_persona}\n"
+            f"  BUILD         v137 · Apr 2026\n"
+            f"  ALPHA         <code>{ALPHA}</code>\n"
+            "──────────────────────\n"
+            "<b>MODES</b>\n"
+            f"  ANTIGRAVITY   {antigravity_status} {'ON' if chat_id in antigravity_chats else 'OFF'}\n"
+            f"  ALCHEMY       {alchemy_status} {'ON' if chat_id in alchemy_chats else 'OFF'}\n"
+            f"  DASHBOARD     {dashboard_status} {'ON' if chat_id in dashboard_chats else 'OFF'}\n"
+            f"  SLEEP MODE    {sleep_status} {'ON' if sleep_mode else 'OFF'}\n"
             "──────────────────────\n"
             "<b>REGISTRY</b>\n"
             f"  AUTH GROUPS   {len(auth_groups)}\n"
