@@ -149,6 +149,9 @@ Operational tools for Alphas:
 
 <i>Type /admin_assistant to toggle off.</i>"""
 
+TELEGRAM_ANIMATION_CAPTION_LIMIT = 1024
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
 import db
 
 db.init_db()
@@ -374,6 +377,16 @@ def build_main_menu(chat_id):
         ]
     ]
     return active_menu, InlineKeyboardMarkup(keyboard)
+
+
+def _html_text_length(text):
+    return len(html.unescape(_HTML_TAG_RE.sub("", text)))
+
+
+def _animation_menu_caption(menu_text):
+    if _html_text_length(menu_text) <= TELEGRAM_ANIMATION_CAPTION_LIMIT:
+        return menu_text
+    return MENU_TEXT
 
 
 def is_admin_lounge_chat(chat_id):
@@ -740,9 +753,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_lower in ["/start", "/menu", "/help"]:
             await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             active_menu, reply_markup = build_main_menu(chat_id)
+            animation_caption = _animation_menu_caption(active_menu)
             try:
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=active_menu, parse_mode="HTML", reply_markup=reply_markup)
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=animation_caption, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
                 logging.error("Menu formatting crash", exc_info=True)
                 await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=reply_markup)
