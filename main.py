@@ -185,17 +185,21 @@ MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
         InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
     ],
     [
-        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard"),
-        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket")
+        InlineKeyboardButton("🧭 /admin_assistant", callback_data="cmd:admin_assistant"),
+        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard")
     ],
     [
-        InlineKeyboardButton("📡 /ping", callback_data="cmd:ping")
+        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket"),
+        InlineKeyboardButton("🛰️ /ping", callback_data="cmd:ping")
+    ],
+    [
+        InlineKeyboardButton("📡 /relay", callback_data="cmd:relay"),
+        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
     ],
     [
         InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
-        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
-    ],
-    [CLOSE_BUTTON]
+        CLOSE_BUTTON
+    ]
 ])
 
 TICKET_PROJECT_KEYBOARD = InlineKeyboardMarkup([
@@ -1544,7 +1548,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.delete_message()
         return
 
-    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona", "toggle_sleep"]:
+    message_text = getattr(query.message, "text", "") or ""
+    is_alpha_console = "PUPSONA // ALPHA CONSOLE" in message_text
+    if query.data in ["cmd:dashboard", "cmd:dashmode", "cmd:pupsona", "toggle_sleep"] or (is_alpha_console and query.data in ["cmd:alchemy", "cmd:antigravity"]):
         if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
@@ -1563,6 +1569,34 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_state()
             status = "💤 ENABLED" if sleep_mode else "☀️ DISABLED"
             await query.answer(f"Sleep Mode is now {status}")
+        elif query.data == "cmd:alchemy":
+            if chat_id in alchemy_chats:
+                alchemy_chats.remove(chat_id)
+                await query.answer("🪄 Λlchemy Curator Deactivated.")
+            else:
+                alchemy_chats.add(chat_id)
+                antigravity_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
+                await query.answer("🪄 Λlchemy Curator ONLINE.")
+            save_state()
+        elif query.data == "cmd:antigravity":
+            if chat_id in antigravity_chats:
+                antigravity_chats.remove(chat_id)
+                save_state()
+                await query.answer("🔄 Antigravity Mode Deactivated.")
+            elif query.message.chat.type != "private":
+                ticket_states[user_id] = "antigravity_bypass"
+                save_state()
+                await query.answer()
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter Emoji Spring to summon Antigravity into this communal chat:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                except Exception as e: logging.error(f"Send error: {e}")
+            else:
+                antigravity_chats.add(chat_id)
+                alchemy_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
+                save_state()
+                await query.answer("⚡ Antigravity Interface ONLINE.")
         else:
             await query.answer()
 
@@ -1571,28 +1605,21 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         auth_groups = [g.strip() for g in raw_groups.split(",") if g.strip()]
         deploy_url = "https://security.friskydev.com"
 
-        if query.message.chat.type == "private":
-            hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", web_app=WebAppInfo(url=deploy_url))
-        else:
-            hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", url=deploy_url)
+        hub_btn = InlineKeyboardButton("🛡️ Security Dashboard", web_app=WebAppInfo(url=deploy_url)) if query.message.chat.type == "private" else InlineKeyboardButton("🛡️ Security Dashboard", url=deploy_url)
 
-        antigravity_status = "🟢 ON" if chat_id in antigravity_chats else "🔴 OFF"
-        alchemy_status = "🟢 ON" if chat_id in alchemy_chats else "🔴 OFF"
-        dashboard_status = "🟢 ON" if chat_id in dashboard_chats else "🔴 OFF"
-        sleep_status = "🟢 ON" if sleep_mode else "🔴 OFF"
-
-        dash_btn_text = f"🔮 Dashmode {'🟢' if chat_id in dashboard_chats else '🔴'}"
-        sleep_btn_text = f"💤 Sleep Mode {'🟢' if sleep_mode else '🔴'}"
+        antigravity_status = "🟢" if chat_id in antigravity_chats else "🔴"
+        alchemy_status = "🟢" if chat_id in alchemy_chats else "🔴"
+        dashboard_status = "🟢" if chat_id in dashboard_chats else "🔴"
+        sleep_status = "🟢" if sleep_mode else "🔴"
 
         keyboard = [
             [hub_btn],
-            [InlineKeyboardButton("🪄 Arcanum Portal", url="https://arcanum.stixmagic.com"),
-             InlineKeyboardButton("📦 Emoji Pack", url="https://t.me/addemoji/arcanum_magic_emojis_v3_by_stixsignal_bot")],
-            [InlineKeyboardButton(dash_btn_text, callback_data="cmd:dashmode"),
-             InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")],
+            [InlineKeyboardButton(f"🪄 Alchemy {alchemy_status}", callback_data="cmd:alchemy"),
+             InlineKeyboardButton(f"⚡ Antigravity {antigravity_status}", callback_data="cmd:antigravity")],
+            [InlineKeyboardButton(f"🔮 Dashmode {dashboard_status}", callback_data="cmd:dashmode"),
+             InlineKeyboardButton(f"💤 Sleep Mode {sleep_status}", callback_data="toggle_sleep")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
-            [InlineKeyboardButton(sleep_btn_text, callback_data="toggle_sleep")],
             [CLOSE_BUTTON]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1605,10 +1632,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  ALPHA         <code>{ALPHA}</code>\n"
             "──────────────────────\n"
             "<b>MODES</b>\n"
-            f"  ANTIGRAVITY   {antigravity_status}\n"
-            f"  ALCHEMY       {alchemy_status}\n"
-            f"  DASHBOARD     {dashboard_status}\n"
-            f"  SLEEP MODE    {sleep_status}\n"
+            f"  ANTIGRAVITY   {antigravity_status} {'ON' if chat_id in antigravity_chats else 'OFF'}\n"
+            f"  ALCHEMY       {alchemy_status} {'ON' if chat_id in alchemy_chats else 'OFF'}\n"
+            f"  DASHBOARD     {dashboard_status} {'ON' if chat_id in dashboard_chats else 'OFF'}\n"
+            f"  SLEEP MODE    {sleep_status} {'ON' if sleep_mode else 'OFF'}\n"
             "──────────────────────\n"
             "<b>REGISTRY</b>\n"
             f"  AUTH GROUPS   {len(auth_groups)}\n"
@@ -1626,6 +1653,28 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Alpha Console display error: {e}")
         return
 
+    if query.data == "cmd:admin_assistant":
+        if not await is_alpha_user(context, user_id):
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        if chat_id in admin_assistant_chats:
+            admin_assistant_chats.remove(chat_id)
+            save_state()
+            await query.answer("🧭 Admin Assistant OFF.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e: logging.error(f"Send error: {e}")
+        else:
+            admin_assistant_chats.add(chat_id)
+            antigravity_chats.discard(chat_id)
+            alchemy_chats.discard(chat_id)
+            save_state()
+            await query.answer("🧭 Admin Assistant ONLINE.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            except Exception as e: logging.error(f"Send error: {e}")
+        return
+
     if query.data == "cmd:alchemy":
         if not await is_alpha_user(context, user_id):
             await query.answer("⛔ Access Denied.", show_alert=True)
@@ -1639,6 +1688,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e: logging.error(f"Send error: {e}")
         else:
             alchemy_chats.add(chat_id)
+            antigravity_chats.discard(chat_id)
+            admin_assistant_chats.discard(chat_id)
             save_state()
             await query.answer("🪄 Λlchemy Curator ONLINE.")
             try:
@@ -1689,11 +1740,33 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e: logging.error(f"Send error: {e}")
             else:
                 antigravity_chats.add(chat_id)
+                alchemy_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
                 save_state()
                 await query.answer("⚡ Antigravity Interface ONLINE.")
                 try:
                     await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                 except Exception as e: logging.error(f"Send error: {e}")
+        return
+
+    if query.data == "cmd:relay":
+        if str(chat_id) != str(ADMIN_LOUNGE_ID) and not await is_alpha_user(context, user_id):
+            await query.answer("⛔ Access Denied.", show_alert=True)
+            return
+        if chat_id in relay_chats:
+            relay_chats.remove(chat_id)
+            save_state()
+            await query.answer("📡 Relay Mode OFF.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML")
+            except Exception as e: logging.error(f"Send error: {e}")
+        else:
+            relay_chats.add(chat_id)
+            save_state()
+            await query.answer("📡 Relay Mode ON.")
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML")
+            except Exception as e: logging.error(f"Send error: {e}")
         return
 
     if query.data == "cmd:ping":
