@@ -149,6 +149,9 @@ Operational tools for Alphas:
 
 <i>Type /admin_assistant to toggle off.</i>"""
 
+TELEGRAM_ANIMATION_CAPTION_LIMIT = 1024
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
 import db
 
 db.init_db()
@@ -179,28 +182,6 @@ admin_owner_last_refresh = 0.0
 CLOSE_BUTTON = InlineKeyboardButton("🗑️ Close", callback_data="close_message")
 CLOSE_KEYBOARD = InlineKeyboardMarkup([[CLOSE_BUTTON]])
 
-MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("🪄 /alchemy", callback_data="cmd:alchemy"),
-        InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
-    ],
-    [
-        InlineKeyboardButton("🧭 /admin_assistant", callback_data="cmd:admin_assistant"),
-        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard")
-    ],
-    [
-        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket"),
-        InlineKeyboardButton("🛰️ /ping", callback_data="cmd:ping")
-    ],
-    [
-        InlineKeyboardButton("📡 /relay", callback_data="cmd:relay"),
-        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
-    ],
-    [
-        InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
-        CLOSE_BUTTON
-    ]
-])
 
 TICKET_PROJECT_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
@@ -355,6 +336,57 @@ def get_effective_mode(chat_id):
     if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
         return mode_name
     return "puppy"
+
+
+def build_main_menu(chat_id):
+    chat_id = _safe_chat_id(chat_id)
+    effective_mode = get_effective_mode(chat_id)
+
+    active_menu = MENU_TEXT
+    if effective_mode == "antigravity":
+        active_menu = f"{ANTIGRAVITY_MENU_TEXT}\n\n{MENU_TEXT}"
+    elif effective_mode == "alchemy":
+        active_menu = f"{ALCHEMY_MENU_TEXT}\n\n{MENU_TEXT}"
+    elif effective_mode == "admin_assistant":
+        active_menu = f"{ADMIN_ASSISTANT_MENU_TEXT}\n\n{MENU_TEXT}"
+
+    antigravity_status = "🟢" if chat_id in antigravity_chats else "🔴"
+    alchemy_status = "🟢" if chat_id in alchemy_chats else "🔴"
+    admin_assistant_status = "🟢" if chat_id in admin_assistant_chats else "🔴"
+
+    keyboard = [
+        [
+            InlineKeyboardButton(f"🪄 Alchemy {alchemy_status}", callback_data="cmd:alchemy"),
+            InlineKeyboardButton(f"⚡ Antigravity {antigravity_status}", callback_data="cmd:antigravity")
+        ],
+        [
+            InlineKeyboardButton(f"🧭 Admin Asst {admin_assistant_status}", callback_data="cmd:admin_assistant"),
+            InlineKeyboardButton("🎛️ Dashboard", callback_data="cmd:dashboard")
+        ],
+        [
+            InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket"),
+            InlineKeyboardButton("🛰️ /ping", callback_data="cmd:ping")
+        ],
+        [
+            InlineKeyboardButton("📡 /relay", callback_data="cmd:relay"),
+            InlineKeyboardButton("🐶 /auth_group", callback_data="cmd:authorize_group")
+        ],
+        [
+            InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
+            CLOSE_BUTTON
+        ]
+    ]
+    return active_menu, InlineKeyboardMarkup(keyboard)
+
+
+def _html_text_length(text):
+    return len(html.unescape(_HTML_TAG_RE.sub("", text)))
+
+
+def _animation_menu_caption(menu_text):
+    if _html_text_length(menu_text) <= TELEGRAM_ANIMATION_CAPTION_LIMIT:
+        return menu_text
+    return MENU_TEXT
 
 
 def is_admin_lounge_chat(chat_id):
@@ -720,11 +752,17 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if text_lower in ["/start", "/menu", "/help"]:
             try:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception as e:
+                logging.debug(f"Ignored error: {e}")
+            active_menu, reply_markup = build_main_menu(chat_id)
+            animation_caption = _animation_menu_caption(active_menu)
+            try:
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=animation_caption, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
                 logging.error("Menu formatting crash", exc_info=True)
-                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+                await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=reply_markup)
             return
 
         # Command to add debuggers
@@ -1857,20 +1895,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "show_menu":
         await query.answer()
-        active_menu = MENU_TEXT
-        effective_mode = get_effective_mode(chat_id)
-
-        if effective_mode == "antigravity":
-            active_menu = f"{ANTIGRAVITY_MENU_TEXT}\n\n{MENU_TEXT}"
-        elif effective_mode == "alchemy":
-            active_menu = f"{ALCHEMY_MENU_TEXT}\n\n{MENU_TEXT}"
-        elif effective_mode == "admin_assistant":
-            active_menu = f"{ADMIN_ASSISTANT_MENU_TEXT}\n\n{MENU_TEXT}"
-
+        active_menu, reply_markup = build_main_menu(chat_id)
         try:
-            await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+            await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=reply_markup)
         except Exception:
-            await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+            await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=reply_markup)
         return
 
     if query.data == "ping_back":

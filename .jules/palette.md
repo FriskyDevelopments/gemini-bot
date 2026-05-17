@@ -43,3 +43,7 @@
 ## 2026-05-15 - [Real-time Status Visualization]
 **Learning:** In interactive dashboards, users need immediate visual confirmation of state changes. Consolidating toggle logic within the dashboard's render loop and adding 🟢/🔴 status indicators to both labels and buttons provides "Visibility of System Status" and makes the interface feel more responsive.
 **Action:** Use 🟢/🔴 indicators for boolean states in menus and ensure toggle actions trigger an immediate UI refresh of the parent menu.
+
+## 2026-05-17 - [Unified Context-Aware Menus with Status Indicators]
+**Learning:** For bots with multiple toggleable modes, providing immediate visibility of system status in the main menu reduces cognitive load. Centralizing menu generation into a single helper ensure consistency across command-based and button-based entry points.
+**Action:** Use a unified `build_main_menu` helper to inject 🟢/🔴 status indicators into buttons and prepend mode-specific help text dynamically.

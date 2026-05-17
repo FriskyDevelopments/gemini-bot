@@ -1,10 +1,30 @@
 import unittest
+import io
 import os
+from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import patch
 from unittest.mock import AsyncMock
 
 import main
+
+
+class _HtmlTextLengthParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+    def length(self):
+        return len("".join(self.parts))
+
+
+def _html_text_length(text):
+    parser = _HtmlTextLengthParser()
+    parser.feed(text)
+    return parser.length()
 
 
 class TestMainModes(unittest.TestCase):
@@ -292,6 +312,76 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         broadcast_call = context.bot.send_message.call_args_list[0]
         self.assertEqual(broadcast_call.kwargs["chat_id"], "-200")
         self.assertNotIn("reply_markup", broadcast_call.kwargs)
+
+    async def test_menu_animation_caption_stays_within_telegram_limit_for_active_mode(self):
+        chat_id = "-100111"
+        main.antigravity_chats.add(chat_id)
+        message = SimpleNamespace(
+            text="/menu",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="private"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id=chat_id),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_chat_action=AsyncMock(),
+                send_animation=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("builtins.open", return_value=io.BytesIO(b"gif")):
+            await main.lounge_host(update, context)
+
+        context.bot.send_animation.assert_awaited_once()
+        caption = context.bot.send_animation.call_args.kwargs["caption"]
+        self.assertLessEqual(_html_text_length(caption), 1024)
+        context.bot.send_message.assert_not_awaited()
+
+    async def test_menu_still_displays_when_chat_action_fails(self):
+        chat_id = "-100111"
+        message = SimpleNamespace(
+            text="/menu",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="private"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id=chat_id),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_chat_action=AsyncMock(side_effect=RuntimeError("typing failed")),
+                send_animation=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+
+        raised = None
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("builtins.open", return_value=io.BytesIO(b"gif")):
+            try:
+                await main.lounge_host(update, context)
+            except RuntimeError as exc:
+                raised = exc
+
+        self.assertIsNone(raised)
+        context.bot.send_animation.assert_awaited_once()
+        context.bot.send_message.assert_not_awaited()
 
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
