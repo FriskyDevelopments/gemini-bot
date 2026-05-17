@@ -1656,7 +1656,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "──────────────────────\n"
             f"  PERSONA       {active_persona}\n"
             f"  BUILD         v137 · Apr 2026\n"
-            f"  ALPHA         <code>{ALPHA}</code>\n"
+            f"  ALPHA         <code>{ALPHA or 'not configured'}</code>\n"
             "──────────────────────\n"
             "<b>MODES</b>\n"
             f"  ANTIGRAVITY   {antigravity_status} {'ON' if chat_id in antigravity_chats else 'OFF'}\n"
