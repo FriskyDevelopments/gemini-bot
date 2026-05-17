@@ -32,14 +32,19 @@ except Exception as e:
     logging.warning(f"Could not load .env file: {e}")
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ALPHA = os.getenv("ALPHA_USER_ID", "8091939499")
+# Security: Removed hardcoded default ID to prevent unauthorized admin access.
+# Ensure ALPHA_USER_ID is set in the environment.
+ALPHA = os.getenv("ALPHA_USER_ID")
 EXTRA_ALPHAS = [uid.strip() for uid in os.getenv("EXTRA_ALPHA_IDS", "").split(",") if uid.strip()]
 ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN")
-ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
+# Security: Removed hardcoded default password to prevent unauthorized bypasses.
+# Ensure ANTIGRAVITY_BYPASS_PASSWORD is set in the environment.
+ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD")
+ANTIGRAVITY_BYPASS_UNCONFIGURED_TEXT = "⛔ <b>Antigravity Bypass Unavailable.</b> Group bypass is not configured. Ask an admin to set <code>ANTIGRAVITY_BYPASS_PASSWORD</code>."
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
 
@@ -159,7 +164,7 @@ alchemy_chats = set(db.get_val("alchemy_chats", []))
 admin_assistant_chats = set(db.get_val("admin_assistant_chats", []))
 dashboard_chats = set(db.get_val("dashboard_chats", []))
 relay_chats = set(db.get_val("relay_chats", []))
-debuggers = set(db.get_val("debuggers", [ALPHA]))
+debuggers = set(db.get_val("debuggers", [ALPHA] if ALPHA else []))
 ticket_states = dict(db.get_val("ticket_states", {}))
 ticket_data = dict(db.get_val("ticket_data", {}))
 invitations = dict(db.get_val("invitations", {}))
@@ -171,7 +176,8 @@ sleep_mode = db.get_val("sleep_mode", False)
 relay_drafts = {}
 conversation_histories = {}
 
-CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
+# Security: Filter out None/empty IDs to prevent accidental authorization.
+CORE_ALPHA_IDS = {str(uid).strip() for uid in [ALPHA, *EXTRA_ALPHAS] if uid and str(uid).strip()}
 LINK_CODE_TTL_SECONDS = int(os.getenv("LINK_CODE_TTL_SECONDS", "900"))
 ADMIN_OWNER_REFRESH_SECONDS = int(os.getenv("ADMIN_OWNER_REFRESH_SECONDS", "300"))
 admin_owner_last_refresh = 0.0
@@ -442,6 +448,8 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
 
 async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     uid = _safe_chat_id(user_id)
+    if not uid:
+        return False
     if uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids:
         return True
     await refresh_dynamic_alpha_ids(context)
@@ -979,6 +987,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             if update.message.chat.type != "private":
+                if not ANTIGRAVITY_BYPASS_PASSWORD:
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_TEXT, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
+                    return
+
                 ticket_states[user_id] = "antigravity_bypass"
                 ticket_data[user_id] = {"target_chat_id": chat_id}
                 save_state()
@@ -1208,6 +1222,15 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await update.message.delete()
                         await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
                     except: pass
+                    return
+
+                elif not ANTIGRAVITY_BYPASS_PASSWORD:
+                    del ticket_states[user_id]
+                    ticket_data.pop(user_id, None)
+                    save_state()
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_TEXT, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+                    except Exception as e: logging.debug(f"Ignored error: {e}")
                     return
 
                 elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
@@ -1585,6 +1608,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 save_state()
                 await query.answer("🔄 Antigravity Mode Deactivated.")
             elif query.message.chat.type != "private":
+                if not ANTIGRAVITY_BYPASS_PASSWORD:
+                    await query.answer("Antigravity bypass is not configured.", show_alert=True)
+                    return
+
                 ticket_states[user_id] = "antigravity_bypass"
                 save_state()
                 await query.answer()
@@ -1629,7 +1656,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "──────────────────────\n"
             f"  PERSONA       {active_persona}\n"
             f"  BUILD         v137 · Apr 2026\n"
-            f"  ALPHA         <code>{ALPHA}</code>\n"
+            f"  ALPHA         <code>{ALPHA or 'not configured'}</code>\n"
             "──────────────────────\n"
             "<b>MODES</b>\n"
             f"  ANTIGRAVITY   {antigravity_status} {'ON' if chat_id in antigravity_chats else 'OFF'}\n"
@@ -1732,6 +1759,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e: logging.error(f"Send error: {e}")
         else:
             if query.message.chat.type != "private":
+                if not ANTIGRAVITY_BYPASS_PASSWORD:
+                    await query.answer("Antigravity bypass is not configured.", show_alert=True)
+                    return
+
                 ticket_states[user_id] = "antigravity_bypass"
                 save_state()
                 await query.answer()
