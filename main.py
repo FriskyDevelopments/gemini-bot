@@ -751,7 +751,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower in ["/start", "/menu", "/help"]:
-            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+            try:
+                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception as e:
+                logging.debug(f"Ignored error: {e}")
             active_menu, reply_markup = build_main_menu(chat_id)
             animation_caption = _animation_menu_caption(active_menu)
             try:

@@ -347,6 +347,42 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(_html_text_length(caption), 1024)
         context.bot.send_message.assert_not_awaited()
 
+    async def test_menu_still_displays_when_chat_action_fails(self):
+        chat_id = "-100111"
+        message = SimpleNamespace(
+            text="/menu",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="private"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id=chat_id),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_chat_action=AsyncMock(side_effect=RuntimeError("typing failed")),
+                send_animation=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+
+        raised = None
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("builtins.open", return_value=io.BytesIO(b"gif")):
+            try:
+                await main.lounge_host(update, context)
+            except RuntimeError as exc:
+                raised = exc
+
+        self.assertIsNone(raised)
+        context.bot.send_animation.assert_awaited_once()
+        context.bot.send_message.assert_not_awaited()
+
     async def test_refresh_dynamic_alpha_ids_includes_admins(self):
         original_admin_lounge_id = main.ADMIN_LOUNGE_ID
         original_dynamic_alpha_ids = set(main.dynamic_alpha_ids)
