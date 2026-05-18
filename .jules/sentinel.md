@@ -49,3 +49,8 @@
 **Vulnerability:** The GitHub webhook bot triggered expensive AI code reviews for any pull request event or comment containing broad keywords (like 'gemini'), regardless of the user's authorization status.
 **Learning:** Webhooks that trigger external API calls (especially LLMs) must verify the requester's identity or relationship to the project via `author_association` or similar metadata to prevent resource exhaustion and unauthorized access. broad keyword matching in communal contexts (issue comments) leads to accidental triggers.
 **Prevention:** Restrict webhook-triggered actions to trusted roles (e.g., `OWNER`, `MEMBER`, `COLLABORATOR`). Use specific command prefixes or mentions for manual triggers instead of generic substring matches.
+
+## 2026-05-18 - Authorization Bypass via Empty String Matching
+**Vulnerability:** Authorization checks (is_alpha) were vulnerable to bypass if configuration environment variables (ALPHA_USER_ID) were missing or empty, as the ID sanitization function returned an empty string for invalid inputs, which then matched the empty entry in the privileged ID set.
+**Learning:** Initializing sets from split environment variables without filtering can introduce empty strings. Sanitization functions that return a default "safe" value (like an empty string) must be handled carefully in downstream membership checks.
+**Prevention:** Always filter empty/null values during configuration initialization and implement explicit early-exit guards in authorization functions for empty or invalid sanitized identities.
