@@ -179,28 +179,6 @@ admin_owner_last_refresh = 0.0
 CLOSE_BUTTON = InlineKeyboardButton("🗑️ Close", callback_data="close_message")
 CLOSE_KEYBOARD = InlineKeyboardMarkup([[CLOSE_BUTTON]])
 
-MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("🪄 /alchemy", callback_data="cmd:alchemy"),
-        InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
-    ],
-    [
-        InlineKeyboardButton("🧭 /admin_assistant", callback_data="cmd:admin_assistant"),
-        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard")
-    ],
-    [
-        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket"),
-        InlineKeyboardButton("🛰️ /ping", callback_data="cmd:ping")
-    ],
-    [
-        InlineKeyboardButton("📡 /relay", callback_data="cmd:relay"),
-        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
-    ],
-    [
-        InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
-        CLOSE_BUTTON
-    ]
-])
 
 TICKET_PROJECT_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
@@ -355,6 +333,38 @@ def get_effective_mode(chat_id):
     if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
         return mode_name
     return "puppy"
+
+
+def build_menu(chat_id):
+    cid = str(chat_id)
+    alchemy_status = "🟢" if cid in alchemy_chats else "🔴"
+    antigravity_status = "🟢" if cid in antigravity_chats else "🔴"
+    admin_assistant_status = "🟢" if cid in admin_assistant_chats else "🔴"
+    dashboard_status = "🟢" if cid in dashboard_chats else "🔴"
+    relay_status = "🟢" if cid in relay_chats else "🔴"
+
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(f"🪄 Alchemy {alchemy_status}", callback_data="cmd:alchemy"),
+            InlineKeyboardButton(f"⚡ Antigravity {antigravity_status}", callback_data="cmd:antigravity")
+        ],
+        [
+            InlineKeyboardButton(f"🧭 Admin Asst {admin_assistant_status}", callback_data="cmd:admin_assistant"),
+            InlineKeyboardButton(f"🎛️ Dashboard {dashboard_status}", callback_data="cmd:dashboard")
+        ],
+        [
+            InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket"),
+            InlineKeyboardButton("🛰️ /ping", callback_data="cmd:ping")
+        ],
+        [
+            InlineKeyboardButton(f"📡 Relay {relay_status}", callback_data="cmd:relay"),
+            InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
+        ],
+        [
+            InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
+            CLOSE_BUTTON
+        ]
+    ])
 
 
 def is_admin_lounge_chat(chat_id):
@@ -719,12 +729,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower in ["/start", "/menu", "/help"]:
+            reply_markup = build_menu(chat_id)
             try:
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
                 logging.error("Menu formatting crash", exc_info=True)
-                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML", reply_markup=reply_markup)
             return
 
         # Command to add debuggers
@@ -1867,10 +1878,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif effective_mode == "admin_assistant":
             active_menu = f"{ADMIN_ASSISTANT_MENU_TEXT}\n\n{MENU_TEXT}"
 
+        reply_markup = build_menu(chat_id)
         try:
-            await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+            await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=reply_markup)
         except Exception:
-            await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+            await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=reply_markup)
         return
 
     if query.data == "ping_back":
