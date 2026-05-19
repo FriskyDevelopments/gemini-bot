@@ -179,28 +179,6 @@ admin_owner_last_refresh = 0.0
 CLOSE_BUTTON = InlineKeyboardButton("🗑️ Close", callback_data="close_message")
 CLOSE_KEYBOARD = InlineKeyboardMarkup([[CLOSE_BUTTON]])
 
-MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton("🪄 /alchemy", callback_data="cmd:alchemy"),
-        InlineKeyboardButton("⚡ /antigravity", callback_data="cmd:antigravity")
-    ],
-    [
-        InlineKeyboardButton("🧭 /admin_assistant", callback_data="cmd:admin_assistant"),
-        InlineKeyboardButton("🎛️ /dashboard", callback_data="cmd:dashboard")
-    ],
-    [
-        InlineKeyboardButton("👔 /ticket", callback_data="cmd:ticket"),
-        InlineKeyboardButton("🛰️ /ping", callback_data="cmd:ping")
-    ],
-    [
-        InlineKeyboardButton("📡 /relay", callback_data="cmd:relay"),
-        InlineKeyboardButton("🐶 /authorize_group", callback_data="cmd:authorize_group")
-    ],
-    [
-        InlineKeyboardButton("🔐 /pupsona (Admin)", callback_data="cmd:pupsona"),
-        CLOSE_BUTTON
-    ]
-])
 
 TICKET_PROJECT_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("Clipsflow", callback_data="ticket_proj:ClipFLOW"),
@@ -355,6 +333,24 @@ def get_effective_mode(chat_id):
     if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
         return mode_name
     return "puppy"
+
+
+def build_menu(chat_id, is_alpha=False):
+    m, cid = get_effective_mode(chat_id), str(chat_id)
+    r = "🟢" if cid in relay_chats else "🔴"
+    a = "🟢" if cid in _read_authorized_groups() else "🔴"
+    kb = [
+        [InlineKeyboardButton(f"🪄 Alchemy {'🟢' if m=='alchemy' else '🔴'}", callback_data="cmd:alchemy"),
+         InlineKeyboardButton(f"⚡ Antigravity {'🟢' if m=='antigravity' else '🔴'}", callback_data="cmd:antigravity")],
+        [InlineKeyboardButton(f"🧭 Admin Asst {'🟢' if m=='admin_assistant' else '🔴'}", callback_data="cmd:admin_assistant"),
+         InlineKeyboardButton("🎛️ Dashboard", callback_data="cmd:dashboard")],
+        [InlineKeyboardButton("👔 Ticket", callback_data="cmd:ticket"), InlineKeyboardButton("🛰️ Ping", callback_data="cmd:ping")],
+        [InlineKeyboardButton(f"📡 Relay {r}", callback_data="cmd:relay"), InlineKeyboardButton(f"🐶 Authorize {a}", callback_data="cmd:authorize_group")]
+    ]
+    if is_alpha: kb.append([InlineKeyboardButton("🔐 Pupsona", callback_data="cmd:pupsona"), CLOSE_BUTTON])
+    else: kb.append([CLOSE_BUTTON])
+    h = {"antigravity": ANTIGRAVITY_MENU_TEXT, "alchemy": ALCHEMY_MENU_TEXT, "admin_assistant": ADMIN_ASS_TEXT if 'ADMIN_ASS_TEXT' in globals() else ADMIN_ASSISTANT_MENU_TEXT}.get(m, "")
+    return f"{h + '\n\n' if h else ''}{MENU_TEXT}", InlineKeyboardMarkup(kb)
 
 
 def is_admin_lounge_chat(chat_id):
@@ -719,12 +715,12 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower in ["/start", "/menu", "/help"]:
+            await context.bot.send_chat_action(chat_id=chat_id, action='typing')
+            mt, rm = build_menu(chat_id, is_alpha)
             try:
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
-            except Exception as e:
-                logging.error("Menu formatting crash", exc_info=True)
-                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=mt, parse_mode="HTML", reply_markup=rm)
+            except Exception: await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
             return
 
         # Command to add debuggers
@@ -1538,6 +1534,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Error: MAIN_GROUP_ID is not set.")
             return
 
+async def _refresh_menu(query, context, user_id, chat_id):
+    is_alpha = await is_alpha_user(context, user_id)
+    mt, rm = build_menu(chat_id, is_alpha)
+    try: await query.edit_message_text(mt, parse_mode="HTML", reply_markup=rm)
+    except Exception: pass
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = str(query.from_user.id)
@@ -1653,120 +1656,36 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logging.error(f"Alpha Console display error: {e}")
         return
 
-    if query.data == "cmd:admin_assistant":
-        if not await is_alpha_user(context, user_id):
-            await query.answer("⛔ Access Denied.", show_alert=True)
-            return
-        if chat_id in admin_assistant_chats:
-            admin_assistant_chats.remove(chat_id)
-            save_state()
-            await query.answer("🧭 Admin Assistant OFF.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant OFF.</b>\nReturning to standard Pup mode.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        else:
-            admin_assistant_chats.add(chat_id)
-            antigravity_chats.discard(chat_id)
-            alchemy_chats.discard(chat_id)
-            save_state()
-            await query.answer("🧭 Admin Assistant ONLINE.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🧭 <b>Admin Assistant ONLINE.</b>\nI will now respond as your operations copilot.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        return
-
-    if query.data == "cmd:alchemy":
-        if not await is_alpha_user(context, user_id):
-            await query.answer("⛔ Access Denied.", show_alert=True)
-            return
-        if chat_id in alchemy_chats:
-            alchemy_chats.remove(chat_id)
-            save_state()
-            await query.answer("🪄 Λlchemy Curator Deactivated.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        else:
-            alchemy_chats.add(chat_id)
-            antigravity_chats.discard(chat_id)
-            admin_assistant_chats.discard(chat_id)
-            save_state()
-            await query.answer("🪄 Λlchemy Curator ONLINE.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🪄 <b>Λlchemy Curator ONLINE.</b>\nThe Cauldron is bubbling. Let's brew some viral magic.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        return
-
-
-    if query.data == "cmd:authorize_group":
-        if not await is_alpha_user(context, user_id):
-            await query.answer("⛔ Access Denied.", show_alert=True)
-            return
-
-        if chat_id in _read_authorized_groups():
-            await query.answer("🐶 This group is already authorized!", show_alert=True)
-            return
-
-        if _authorize_group_local(chat_id):
-            await query.answer("✅ GROUP AUTHORIZED!", show_alert=True)
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text="✅ <b>GROUP AUTHORIZED!</b>\nAnyone inside this group now has permission to talk to me! Arf!",
-                parse_mode="HTML",
-                reply_markup=CLOSE_KEYBOARD
-            )
-        else:
-            await query.answer("⚠️ Failed to save authorization.", show_alert=True)
-        return
-
-    if query.data == "cmd:antigravity":
-        if not await is_alpha_user(context, user_id):
-            await query.answer("⛔ Access Denied.", show_alert=True)
-            return
-        if chat_id in antigravity_chats:
-            antigravity_chats.remove(chat_id)
-            save_state()
-            await query.answer("🔄 Antigravity Mode Deactivated.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="🔄 <b>Antigravity Mode Deactivated.</b> Returning to Pupbot persona.", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-            except Exception as e: logging.error(f"Send error: {e}")
-        else:
-            if query.message.chat.type != "private":
-                ticket_states[user_id] = "antigravity_bypass"
-                save_state()
-                await query.answer()
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs to prevent group cross-talk.\n\n<i>Enter Emoji Spring to summon Antigravity into this communal chat:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-                except Exception as e: logging.error(f"Send error: {e}")
+    if query.data in ["cmd:admin_assistant", "cmd:alchemy", "cmd:antigravity", "cmd:relay", "cmd:authorize_group"]:
+        if not await is_alpha_user(context, user_id): return await query.answer("⛔ Access Denied.", show_alert=True)
+        if query.data == "cmd:admin_assistant":
+            if chat_id in admin_assistant_chats: admin_assistant_chats.remove(chat_id)
             else:
-                antigravity_chats.add(chat_id)
-                alchemy_chats.discard(chat_id)
-                admin_assistant_chats.discard(chat_id)
-                save_state()
+                admin_assistant_chats.add(chat_id); antigravity_chats.discard(chat_id); alchemy_chats.discard(chat_id)
+            await query.answer(f"🧭 Admin Assistant {'OFF' if chat_id not in admin_assistant_chats else 'ONLINE'}")
+        elif query.data == "cmd:alchemy":
+            if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
+            else:
+                alchemy_chats.add(chat_id); antigravity_chats.discard(chat_id); admin_assistant_chats.discard(chat_id)
+            await query.answer(f"🪄 Alchemy {'OFF' if chat_id not in alchemy_chats else 'ONLINE'}")
+        elif query.data == "cmd:antigravity":
+            if chat_id in antigravity_chats: antigravity_chats.remove(chat_id); await query.answer("🔄 Antigravity Mode Deactivated.")
+            elif query.message.chat.type != "private":
+                ticket_states[user_id] = "antigravity_bypass"; save_state(); await query.answer()
+                return await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs.\n\n<i>Enter Emoji Spring to summon Antigravity here:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
+            else:
+                antigravity_chats.add(chat_id); alchemy_chats.discard(chat_id); admin_assistant_chats.discard(chat_id)
                 await query.answer("⚡ Antigravity Interface ONLINE.")
-                try:
-                    await context.bot.send_message(chat_id=chat_id, text="⚡ <b>Antigravity Interface ONLINE.</b>\nI have dropped the Pup persona. I am your developer now. What architecture are we discussing?", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-                except Exception as e: logging.error(f"Send error: {e}")
-        return
-
-    if query.data == "cmd:relay":
-        if str(chat_id) != str(ADMIN_LOUNGE_ID) and not await is_alpha_user(context, user_id):
-            await query.answer("⛔ Access Denied.", show_alert=True)
-            return
-        if chat_id in relay_chats:
-            relay_chats.remove(chat_id)
-            save_state()
-            await query.answer("📡 Relay Mode OFF.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode OFF.</b> Responses will stay in this lounge.", parse_mode="HTML")
-            except Exception as e: logging.error(f"Send error: {e}")
-        else:
-            relay_chats.add(chat_id)
-            save_state()
-            await query.answer("📡 Relay Mode ON.")
-            try:
-                await context.bot.send_message(chat_id=chat_id, text="📡 <b>Relay Mode ON.</b> My future text and image responses here will be forwarded directly to the Main Lounge!", parse_mode="HTML")
-            except Exception as e: logging.error(f"Send error: {e}")
+        elif query.data == "cmd:relay":
+            if str(chat_id) != str(ADMIN_LOUNGE_ID): return await query.answer("⛔ Admin Lounge only.", show_alert=True)
+            if chat_id in relay_chats: relay_chats.remove(chat_id)
+            else: relay_chats.add(chat_id)
+            await query.answer(f"📡 Relay {'OFF' if chat_id not in relay_chats else 'ON'}")
+        elif query.data == "cmd:authorize_group":
+            if chat_id in _read_authorized_groups(): return await query.answer("🐶 Already authorized!", show_alert=True)
+            if _authorize_group_local(chat_id): await query.answer("✅ GROUP AUTHORIZED!", show_alert=True)
+            else: return await query.answer("⚠️ Failed to save auth.", show_alert=True)
+        save_state(); await _refresh_menu(query, context, user_id, chat_id)
         return
 
     if query.data == "cmd:ping":
@@ -1856,21 +1775,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     if query.data == "show_menu":
-        await query.answer()
-        active_menu = MENU_TEXT
-        effective_mode = get_effective_mode(chat_id)
-
-        if effective_mode == "antigravity":
-            active_menu = f"{ANTIGRAVITY_MENU_TEXT}\n\n{MENU_TEXT}"
-        elif effective_mode == "alchemy":
-            active_menu = f"{ALCHEMY_MENU_TEXT}\n\n{MENU_TEXT}"
-        elif effective_mode == "admin_assistant":
-            active_menu = f"{ADMIN_ASSISTANT_MENU_TEXT}\n\n{MENU_TEXT}"
-
-        try:
-            await query.edit_message_text(active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
-        except Exception:
-            await context.bot.send_message(chat_id=chat_id, text=active_menu, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
+        await query.answer(); await _refresh_menu(query, context, user_id, chat_id)
         return
 
     if query.data == "ping_back":
