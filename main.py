@@ -349,15 +349,8 @@ def build_menu(chat_id, is_alpha=False):
     ]
     if is_alpha: kb.append([InlineKeyboardButton("🔐 Pupsona", callback_data="cmd:pupsona"), CLOSE_BUTTON])
     else: kb.append([CLOSE_BUTTON])
-    h = {"antigravity": ANTIGRAVITY_MENU_TEXT, "alchemy": ALCHEMY_MENU_TEXT, "admin_assistant": ADMIN_ASSISTANT_MENU_TEXT}.get(m, "")
+    h = {"antigravity": ANTIGRAVITY_MENU_TEXT, "alchemy": ALCHEMY_MENU_TEXT, "admin_assistant": ADMIN_ASS_TEXT if 'ADMIN_ASS_TEXT' in globals() else ADMIN_ASSISTANT_MENU_TEXT}.get(m, "")
     return f"{h + '\n\n' if h else ''}{MENU_TEXT}", InlineKeyboardMarkup(kb)
-
-
-TELEGRAM_CAPTION_LIMIT = 1024
-
-
-def _telegram_html_text_length(text):
-    return len(html.unescape(re.sub(r"<[^>]+>", "", text)))
 
 
 def is_admin_lounge_chat(chat_id):
@@ -724,13 +717,10 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_lower in ["/start", "/menu", "/help"]:
             await context.bot.send_chat_action(chat_id=chat_id, action='typing')
             mt, rm = build_menu(chat_id, is_alpha)
-            if _telegram_html_text_length(mt) > TELEGRAM_CAPTION_LIMIT:
-                await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
-            else:
-                try:
-                    with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                        await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=mt, parse_mode="HTML", reply_markup=rm)
-                except Exception: await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
+            try:
+                with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=mt, parse_mode="HTML", reply_markup=rm)
+            except Exception: await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
             return
 
         # Command to add debuggers
@@ -1548,14 +1538,9 @@ async def _refresh_menu(query, context, user_id, chat_id):
     is_alpha = await is_alpha_user(context, user_id)
     mt, rm = build_menu(chat_id, is_alpha)
     try:
-        if getattr(query.message, "caption", None) is not None:
-            if _telegram_html_text_length(mt) > TELEGRAM_CAPTION_LIMIT:
-                await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
-            else:
-                await query.edit_message_caption(caption=mt, parse_mode="HTML", reply_markup=rm)
-        else:
-            await query.edit_message_text(mt, parse_mode="HTML", reply_markup=rm)
-    except Exception: pass
+        await query.edit_message_text(mt, parse_mode="HTML", reply_markup=rm)
+    except Exception:
+        pass
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1676,35 +1661,57 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data in ["cmd:admin_assistant", "cmd:alchemy", "cmd:antigravity", "cmd:relay", "cmd:authorize_group"]:
         is_alpha = await is_alpha_user(context, user_id)
         if query.data == "cmd:relay":
-            if str(chat_id) != str(ADMIN_LOUNGE_ID) and not is_alpha: return await query.answer("⛔ Access Denied.", show_alert=True)
-        elif not is_alpha: return await query.answer("⛔ Access Denied.", show_alert=True)
+            if str(chat_id) != str(ADMIN_LOUNGE_ID) and not is_alpha:
+                return await query.answer("⛔ Access Denied.", show_alert=True)
+        elif not is_alpha:
+            return await query.answer("⛔ Access Denied.", show_alert=True)
+
         if query.data == "cmd:admin_assistant":
-            if chat_id in admin_assistant_chats: admin_assistant_chats.remove(chat_id)
+            if chat_id in admin_assistant_chats:
+                admin_assistant_chats.remove(chat_id)
             else:
-                admin_assistant_chats.add(chat_id); antigravity_chats.discard(chat_id); alchemy_chats.discard(chat_id)
+                admin_assistant_chats.add(chat_id)
+                antigravity_chats.discard(chat_id)
+                alchemy_chats.discard(chat_id)
             await query.answer(f"🧭 Admin Assistant {'OFF' if chat_id not in admin_assistant_chats else 'ONLINE'}")
         elif query.data == "cmd:alchemy":
-            if chat_id in alchemy_chats: alchemy_chats.remove(chat_id)
+            if chat_id in alchemy_chats:
+                alchemy_chats.remove(chat_id)
             else:
-                alchemy_chats.add(chat_id); antigravity_chats.discard(chat_id); admin_assistant_chats.discard(chat_id)
+                alchemy_chats.add(chat_id)
+                antigravity_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
             await query.answer(f"🪄 Alchemy {'OFF' if chat_id not in alchemy_chats else 'ONLINE'}")
         elif query.data == "cmd:antigravity":
-            if chat_id in antigravity_chats: antigravity_chats.remove(chat_id); await query.answer("🔄 Antigravity Mode Deactivated.")
+            if chat_id in antigravity_chats:
+                antigravity_chats.remove(chat_id)
+                await query.answer("🔄 Antigravity Mode Deactivated.")
             elif query.message.chat.type != "private":
-                ticket_states[user_id] = "antigravity_bypass"; save_state(); await query.answer()
+                ticket_states[user_id] = "antigravity_bypass"
+                save_state()
+                await query.answer()
                 return await context.bot.send_message(chat_id=chat_id, text="⛔ <b>Antigravity Mode</b> is locked to Private DMs.\n\n<i>Enter Emoji Spring to summon Antigravity here:</i>", parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
             else:
-                antigravity_chats.add(chat_id); alchemy_chats.discard(chat_id); admin_assistant_chats.discard(chat_id)
+                antigravity_chats.add(chat_id)
+                alchemy_chats.discard(chat_id)
+                admin_assistant_chats.discard(chat_id)
                 await query.answer("⚡ Antigravity Interface ONLINE.")
         elif query.data == "cmd:relay":
-            if chat_id in relay_chats: relay_chats.remove(chat_id)
-            else: relay_chats.add(chat_id)
+            if chat_id in relay_chats:
+                relay_chats.remove(chat_id)
+            else:
+                relay_chats.add(chat_id)
             await query.answer(f"📡 Relay {'OFF' if chat_id not in relay_chats else 'ON'}")
         elif query.data == "cmd:authorize_group":
-            if chat_id in _read_authorized_groups(): return await query.answer("🐶 Already authorized!", show_alert=True)
-            if _authorize_group_local(chat_id): await query.answer("✅ GROUP AUTHORIZED!", show_alert=True)
-            else: return await query.answer("⚠️ Failed to save auth.", show_alert=True)
-        save_state(); await _refresh_menu(query, context, user_id, chat_id)
+            if chat_id in _read_authorized_groups():
+                return await query.answer("🐶 Already authorized!", show_alert=True)
+            if _authorize_group_local(chat_id):
+                await query.answer("✅ GROUP AUTHORIZED!", show_alert=True)
+            else:
+                return await query.answer("⚠️ Failed to save auth.", show_alert=True)
+
+        save_state()
+        await _refresh_menu(query, context, user_id, chat_id)
         return
 
     if query.data == "cmd:ping":
