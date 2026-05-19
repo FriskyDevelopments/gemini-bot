@@ -32,7 +32,7 @@ except Exception as e:
     logging.warning(f"Could not load .env file: {e}")
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ALPHA = os.getenv("ALPHA_USER_ID", "8091939499")
+ALPHA = os.getenv("ALPHA_USER_ID")
 EXTRA_ALPHAS = [uid.strip() for uid in os.getenv("EXTRA_ALPHA_IDS", "").split(",") if uid.strip()]
 ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
@@ -40,7 +40,6 @@ MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 groq_api_key = os.getenv("GROQ_API_KEY")
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN")
 ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD")
-ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE = "⚠️ <b>Antigravity bypass is unavailable.</b> The bypass password is not configured on this server. Ask an admin to set <code>ANTIGRAVITY_BYPASS_PASSWORD</code> before using group bypass."
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
 
@@ -172,7 +171,7 @@ sleep_mode = db.get_val("sleep_mode", False)
 relay_drafts = {}
 conversation_histories = {}
 
-CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
+CORE_ALPHA_IDS = {str(uid).strip() for uid in [ALPHA, *EXTRA_ALPHAS] if uid and str(uid).strip()}
 LINK_CODE_TTL_SECONDS = int(os.getenv("LINK_CODE_TTL_SECONDS", "900"))
 ADMIN_OWNER_REFRESH_SECONDS = int(os.getenv("ADMIN_OWNER_REFRESH_SECONDS", "300"))
 admin_owner_last_refresh = 0.0
@@ -439,6 +438,8 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
 
 async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     uid = _safe_chat_id(user_id)
+    if not uid:
+        return False
     if uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids:
         return True
     await refresh_dynamic_alpha_ids(context)
@@ -683,7 +684,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
     if update.message and update.message.new_chat_members:
         inviter = update.message.from_user
-        inviter_name = inviter.username or inviter.first_name
+        inviter_name = inviter.username or inviter.first_name or "Unknown"
         for member in update.message.new_chat_members:
             if inviter.id != member.id:
                 invitations[str(member.id)] = inviter_name
@@ -976,11 +977,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             if update.message.chat.type != "private":
-                if not ANTIGRAVITY_BYPASS_PASSWORD:
-                    try:
-                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-                    except Exception as e: logging.debug(f"Ignored error: {e}")
-                    return
                 ticket_states[user_id] = "antigravity_bypass"
                 ticket_data[user_id] = {"target_chat_id": chat_id}
                 save_state()
@@ -1212,16 +1208,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except: pass
                     return
 
-                elif not ANTIGRAVITY_BYPASS_PASSWORD:
-                    del ticket_states[user_id]
-                    ticket_data.pop(user_id, None)
-                    save_state()
-                    try:
-                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-                    except Exception as e: logging.debug(f"Ignored error: {e}")
-                    return
-
-                elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
+                elif ANTIGRAVITY_BYPASS_PASSWORD and secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     target_chat = ticket_data.get(user_id, {}).get("target_chat_id", chat_id)
                     antigravity_chats.add(target_chat)
                     if target_chat in alchemy_chats: alchemy_chats.remove(target_chat)
@@ -1321,7 +1308,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
             spammer = update.effective_user
             spammer_name = html.escape(spammer.username or spammer.first_name or "Unknown")
-            inviter = html.escape(invitations.get(str(spammer.id), "Unknown / Join Link"))
+            inviter = html.escape(str(invitations.get(str(spammer.id), "Unknown / Join Link")))
             safe_msg = html.escape(full_text[:500])
             
             report = (
@@ -1696,12 +1683,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as e: logging.error(f"Send error: {e}")
         else:
             if query.message.chat.type != "private":
-                if not ANTIGRAVITY_BYPASS_PASSWORD:
-                    await query.answer("Antigravity bypass password is not configured.", show_alert=True)
-                    try:
-                        await context.bot.send_message(chat_id=chat_id, text=ANTIGRAVITY_BYPASS_UNCONFIGURED_MESSAGE, parse_mode="HTML", reply_markup=CLOSE_KEYBOARD)
-                    except Exception as e: logging.error(f"Send error: {e}")
-                    return
                 ticket_states[user_id] = "antigravity_bypass"
                 save_state()
                 await query.answer()
