@@ -329,6 +329,14 @@ def get_mode(chat_id):
 
 
 def get_effective_mode(chat_id):
+    """
+    Map a chat identifier to the bot's effective persona mode.
+    
+    Determines which persona applies to the given chat: returns the chat's configured mode when it is "antigravity", "alchemy", or "admin_assistant", otherwise defaults to "puppy".
+    
+    Returns:
+        mode (str): One of "antigravity", "alchemy", "admin_assistant", or "puppy".
+    """
     mode_name = get_mode(chat_id)
     if mode_name in {"antigravity", "alchemy", "admin_assistant"}:
         return mode_name
@@ -336,6 +344,16 @@ def get_effective_mode(chat_id):
 
 
 def build_menu(chat_id, is_alpha=False):
+    """
+    Builds the menu caption and inline keyboard for a chat based on its current mode and permissions.
+    
+    Parameters:
+    	chat_id (int | str): Chat identifier used to determine mode, relay status, and authorization.
+    	is_alpha (bool): If true, include alpha-only controls (Pupsona) in the keyboard.
+    
+    Returns:
+    	tuple: A pair (caption, keyboard) where `caption` is the menu text to send as message/caption and `keyboard` is an InlineKeyboardMarkup containing mode toggles, ticket/ping actions, relay/authorize buttons, and close controls.
+    """
     m, cid = get_effective_mode(chat_id), str(chat_id)
     r = "🟢" if cid in relay_chats else "🔴"
     a = "🟢" if cid in _read_authorized_groups() else "🔴"
@@ -354,6 +372,15 @@ def build_menu(chat_id, is_alpha=False):
 
 
 def is_admin_lounge_chat(chat_id):
+    """
+    Check whether the given chat ID corresponds to the configured admin lounge.
+    
+    Parameters:
+        chat_id (int | str): Chat identifier to test. Can be a numeric ID or a string.
+    
+    Returns:
+        bool: `True` if `chat_id` matches the configured `ADMIN_LOUNGE_ID`, `False` otherwise.
+    """
     return _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID)
 
 
@@ -671,6 +698,13 @@ async def push_processed_response(context, chat_id, target_chat, reply_text, use
 
 
 async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle incoming Telegram updates for the lounge: membership events, command routing, ticket flows, spam detection, mode toggles, linking/authorization, promo/invite actions, relay drafting, and conversational AI responses.
+    
+    This function processes new-chat-member welcomes and records inviters; interprets and executes various text commands (menu/start/help, admin tools like /add_debugger, /add_admin, /pupsona, /authorize_group, /link_group, /groups, /unlink_group, /antigravity, /alchemy, /relay, /invite, /ticket, /ping, /promo); manages multi-step ticket flows and secure bypass for antigravity mode; detects and reports banned-word spam and deletes offending messages; decides whether to respond based on chat context, sleep mode, mentions, and reply-to-bot conditions; constructs mode-aware prompts (antigravity, alchemy, admin assistant, or default Pup) and invokes the AI backend with fallback behavior; handles relay drafting and preview workflow or delivers formatted text/image/voice responses; updates and persists state for mode membership, tickets, link codes, and conversation history; and sends administrative rule reminders when requested.
+    
+    Side effects: sends and edits Telegram messages, creates/deletes invite links, persists in-memory state to the backing database via save_state(), and may call external services (AI models, GitHub, Twitter, Supabase) as part of commands.
+    """
     msg = update.effective_message
     if not msg or not msg.from_user: return
     
@@ -1535,6 +1569,15 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
 async def _refresh_menu(query, context, user_id, chat_id):
+    """
+    Recompute the inline menu for a chat and update the originating callback message's text and keyboard, silently ignoring edit errors.
+    
+    Parameters:
+        query (CallbackQuery): The callback query whose message should be edited.
+        context (CallbackContext): Handler context used to check user alpha status and build the menu.
+        user_id (int): The Telegram user ID of the caller used to determine alpha privileges.
+        chat_id (str|int): The target chat ID for which the menu should be built.
+    """
     is_alpha = await is_alpha_user(context, user_id)
     mt, rm = build_menu(chat_id, is_alpha)
     try:
@@ -1544,6 +1587,11 @@ async def _refresh_menu(query, context, user_id, chat_id):
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle inline callback queries, routing them to mode toggles, admin console actions, ticketing/ping flows, relay draft controls, and menu/navigation handlers.
+    
+    This function dispatches callback query events produced by inline keyboards and performs the corresponding operations: enforce alpha access for restricted actions, toggle persona/mode/relay/admin-assistant state, persist state changes, initiate or advance ticket and ping flows, manage relay drafts (send, retry, cancel), refresh or rebuild menus in-place, display/manage authorized groups and debuggers, and send emergency GitHub alerts when requested. Side effects include editing or sending chat messages, mutating persisted in-memory state (sets/dicts like mode memberships, ticket_states, ticket_data, relay_drafts), and invoking save_state() where appropriate.
+    """
     query = update.callback_query
     user_id = str(query.from_user.id)
     chat_id = str(query.message.chat.id)
