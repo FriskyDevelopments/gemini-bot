@@ -715,8 +715,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower in ["/start", "/menu", "/help"]:
+            await context.bot.send_chat_action(chat_id=chat_id, action='typing')
             try:
-                await context.bot.send_chat_action(chat_id=chat_id, action='typing')
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
                     await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=MAIN_MENU_KEYBOARD)
             except Exception as e:
@@ -1550,7 +1550,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("⛔ Access Denied.", show_alert=True)
             return
 
-        relay_chat_id = _safe_chat_id(ADMIN_LOUNGE_ID) or chat_id
         if query.data == "cmd:dashmode":
             if chat_id in dashboard_chats:
                 dashboard_chats.remove(chat_id)
@@ -1560,11 +1559,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer("🔮 Dashboard Mode ENABLED.")
             save_state()
         elif query.data == "cmd:relay_toggle":
-            if relay_chat_id in relay_chats:
-                relay_chats.remove(relay_chat_id)
+            if chat_id in relay_chats:
+                relay_chats.remove(chat_id)
                 await query.answer("📡 Relay Mode DISABLED.")
             else:
-                relay_chats.add(relay_chat_id)
+                relay_chats.add(chat_id)
                 await query.answer("📡 Relay Mode ENABLED.")
             save_state()
         else:
@@ -1597,7 +1596,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         antigravity_mode = "ON" if chat_id in antigravity_chats else "—"
         alchemy_mode = "ON" if chat_id in alchemy_chats else "—"
         dashboard_mode = "ON" if chat_id in dashboard_chats else "—"
-        relay_mode = "ON" if relay_chat_id in relay_chats else "—"
+        relay_mode = "ON" if chat_id in relay_chats else "—"
 
         console_text = (
             "<b>◈ PUPSONA // ALPHA CONSOLE</b>\n"
