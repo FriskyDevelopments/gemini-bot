@@ -285,6 +285,27 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         )
         query.edit_message_text.assert_not_awaited()
 
+    async def test_refresh_menu_sends_new_message_when_caption_text_is_too_long(self):
+        query = SimpleNamespace(
+            message=SimpleNamespace(chat=SimpleNamespace(id="-100111"), caption="menu", text=None),
+            edit_message_caption=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+        long_menu = "x" * 1025
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("main.build_menu", return_value=(long_menu, "markup")):
+            await main._refresh_menu(query, context, "123", "-100111")
+
+        query.edit_message_caption.assert_not_awaited()
+        context.bot.send_message.assert_awaited_once_with(
+            chat_id="-100111",
+            text=long_menu,
+            parse_mode="HTML",
+            reply_markup="markup",
+        )
+
     async def test_callback_relay_matches_command_access_rules(self):
         main.ADMIN_LOUNGE_ID = "-100ADMIN"
         cases = [

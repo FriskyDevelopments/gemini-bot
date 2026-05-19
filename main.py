@@ -353,6 +353,13 @@ def build_menu(chat_id, is_alpha=False):
     return f"{h + '\n\n' if h else ''}{MENU_TEXT}", InlineKeyboardMarkup(kb)
 
 
+TELEGRAM_CAPTION_LIMIT = 1024
+
+
+def _telegram_html_text_length(text):
+    return len(html.unescape(re.sub(r"<[^>]+>", "", text)))
+
+
 def is_admin_lounge_chat(chat_id):
     return _safe_chat_id(chat_id) == _safe_chat_id(ADMIN_LOUNGE_ID)
 
@@ -1539,7 +1546,10 @@ async def _refresh_menu(query, context, user_id, chat_id):
     mt, rm = build_menu(chat_id, is_alpha)
     try:
         if getattr(query.message, "caption", None) is not None:
-            await query.edit_message_caption(caption=mt, parse_mode="HTML", reply_markup=rm)
+            if _telegram_html_text_length(mt) > TELEGRAM_CAPTION_LIMIT:
+                await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
+            else:
+                await query.edit_message_caption(caption=mt, parse_mode="HTML", reply_markup=rm)
         else:
             await query.edit_message_text(mt, parse_mode="HTML", reply_markup=rm)
     except Exception: pass
