@@ -3,6 +3,7 @@ import os
 from types import SimpleNamespace
 from unittest.mock import patch
 from unittest.mock import AsyncMock
+from unittest.mock import mock_open
 
 import main
 
@@ -299,6 +300,43 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
             await main._refresh_menu(query, context, "123", "-100111")
 
         query.edit_message_caption.assert_not_awaited()
+        context.bot.send_message.assert_awaited_once_with(
+            chat_id="-100111",
+            text=long_menu,
+            parse_mode="HTML",
+            reply_markup="markup",
+        )
+
+    async def test_menu_command_sends_text_when_caption_text_is_too_long(self):
+        long_menu = "x" * (main.TELEGRAM_CAPTION_LIMIT + 1)
+        message = SimpleNamespace(
+            text="/menu",
+            caption=None,
+            new_chat_members=None,
+            from_user=SimpleNamespace(id=123),
+            reply_to_message=None,
+            chat=SimpleNamespace(type="private"),
+        )
+        update = SimpleNamespace(
+            effective_message=message,
+            effective_user=SimpleNamespace(id=123),
+            effective_chat=SimpleNamespace(id="-100111"),
+            message=message,
+        )
+        context = SimpleNamespace(
+            bot=SimpleNamespace(
+                send_chat_action=AsyncMock(),
+                send_animation=AsyncMock(),
+                send_message=AsyncMock(),
+            )
+        )
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("main.build_menu", return_value=(long_menu, "markup")), \
+             patch("builtins.open", mock_open(read_data=b"GIF89a")):
+            await main.lounge_host(update, context)
+
+        context.bot.send_animation.assert_not_awaited()
         context.bot.send_message.assert_awaited_once_with(
             chat_id="-100111",
             text=long_menu,

@@ -349,7 +349,7 @@ def build_menu(chat_id, is_alpha=False):
     ]
     if is_alpha: kb.append([InlineKeyboardButton("🔐 Pupsona", callback_data="cmd:pupsona"), CLOSE_BUTTON])
     else: kb.append([CLOSE_BUTTON])
-    h = {"antigravity": ANTIGRAVITY_MENU_TEXT, "alchemy": ALCHEMY_MENU_TEXT, "admin_assistant": ADMIN_ASS_TEXT if 'ADMIN_ASS_TEXT' in globals() else ADMIN_ASSISTANT_MENU_TEXT}.get(m, "")
+    h = {"antigravity": ANTIGRAVITY_MENU_TEXT, "alchemy": ALCHEMY_MENU_TEXT, "admin_assistant": ADMIN_ASSISTANT_MENU_TEXT}.get(m, "")
     return f"{h + '\n\n' if h else ''}{MENU_TEXT}", InlineKeyboardMarkup(kb)
 
 
@@ -724,10 +724,13 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text_lower in ["/start", "/menu", "/help"]:
             await context.bot.send_chat_action(chat_id=chat_id, action='typing')
             mt, rm = build_menu(chat_id, is_alpha)
-            try:
-                with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=mt, parse_mode="HTML", reply_markup=rm)
-            except Exception: await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
+            if _telegram_html_text_length(mt) > TELEGRAM_CAPTION_LIMIT:
+                await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
+            else:
+                try:
+                    with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
+                        await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=mt, parse_mode="HTML", reply_markup=rm)
+                except Exception: await context.bot.send_message(chat_id=chat_id, text=mt, parse_mode="HTML", reply_markup=rm)
             return
 
         # Command to add debuggers
