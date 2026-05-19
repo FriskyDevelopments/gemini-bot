@@ -698,7 +698,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
     if update.message and update.message.new_chat_members:
         inviter = update.message.from_user
-        inviter_name = inviter.username or inviter.first_name
+        inviter_name = inviter.username or inviter.first_name or "Unknown"
         for member in update.message.new_chat_members:
             if inviter.id != member.id:
                 invitations[str(member.id)] = inviter_name
@@ -711,7 +711,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"👋 Welcome to the Haus of Howl, {html.escape(member.first_name)}! I'm your host. Tap <b>Open Menu</b> to see available commands.",
+                    text=f"👋 Welcome to the Haus of Howl, {html.escape(member.first_name or 'New Member')}! I'm your host. Tap <b>Open Menu</b> to see available commands.",
                     parse_mode="HTML",
                     reply_markup=reply_markup
                 )
@@ -1322,8 +1322,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = full_text.lower()
         if BANNED_WORDS and any(banned_word in text_lower for banned_word in BANNED_WORDS):
             spammer = update.effective_user
-            spammer_name = html.escape(spammer.username or spammer.first_name)
-            inviter = html.escape(invitations.get(str(spammer.id), "Unknown / Join Link"))
+            spammer_name = html.escape(spammer.username or spammer.first_name or "Unknown")
+            inviter = html.escape(str(invitations.get(str(spammer.id), "Unknown / Join Link")))
             safe_msg = html.escape(full_text[:500])
             
             report = (
