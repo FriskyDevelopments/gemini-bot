@@ -86,7 +86,8 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         context.bot.send_message.assert_called_with(
             chat_id="111",
             text="⛔ <b>Security Alert:</b> Never enter bypass passwords in communal chats. Password entry must be done in Private DM.",
-            parse_mode="HTML"
+            parse_mode="HTML",
+            reply_markup=main.CLOSE_KEYBOARD
         )
         # State should still be active for DM attempt
         self.assertEqual(main.ticket_states[user_id], "antigravity_bypass")
