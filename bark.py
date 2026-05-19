@@ -12,7 +12,9 @@ try:
     msg = response.text
 
     token = os.environ.get("TELEGRAM_TOKEN")
-    chat_id = "-1003446305734"
+    chat_id = os.environ.get("MAIN_GROUP_ID")
+    if not chat_id:
+        raise ValueError("MAIN_GROUP_ID environment variable is not set.")
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = urllib.parse.urlencode({"chat_id": chat_id, "text": msg}).encode()

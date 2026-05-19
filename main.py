@@ -32,14 +32,14 @@ except Exception as e:
     logging.warning(f"Could not load .env file: {e}")
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-ALPHA = os.getenv("ALPHA_USER_ID", "8091939499")
+ALPHA = os.getenv("ALPHA_USER_ID")
 EXTRA_ALPHAS = [uid.strip() for uid in os.getenv("EXTRA_ALPHA_IDS", "").split(",") if uid.strip()]
 ADMIN_LOUNGE_ID = os.getenv("ADMIN_LOUNGE_ID")
 MAIN_GROUP_ID = os.getenv("MAIN_GROUP_ID")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
 github_token = os.getenv("GITHUB_PUPBOT_TOKEN")
-ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD", "ghost")
+ANTIGRAVITY_BYPASS_PASSWORD = os.getenv("ANTIGRAVITY_BYPASS_PASSWORD")
 
 BOT_TONE = os.getenv("BOT_TONE", "friendly").lower()
 
@@ -159,7 +159,7 @@ alchemy_chats = set(db.get_val("alchemy_chats", []))
 admin_assistant_chats = set(db.get_val("admin_assistant_chats", []))
 dashboard_chats = set(db.get_val("dashboard_chats", []))
 relay_chats = set(db.get_val("relay_chats", []))
-debuggers = set(db.get_val("debuggers", [ALPHA]))
+debuggers = set(db.get_val("debuggers", [ALPHA] if ALPHA else []))
 ticket_states = dict(db.get_val("ticket_states", {}))
 ticket_data = dict(db.get_val("ticket_data", {}))
 invitations = dict(db.get_val("invitations", {}))
@@ -171,7 +171,7 @@ sleep_mode = db.get_val("sleep_mode", False)
 relay_drafts = {}
 conversation_histories = {}
 
-CORE_ALPHA_IDS = {str(ALPHA), *{str(uid) for uid in EXTRA_ALPHAS}}
+CORE_ALPHA_IDS = {str(uid).strip() for uid in [ALPHA, *EXTRA_ALPHAS] if uid and str(uid).strip()}
 LINK_CODE_TTL_SECONDS = int(os.getenv("LINK_CODE_TTL_SECONDS", "900"))
 ADMIN_OWNER_REFRESH_SECONDS = int(os.getenv("ADMIN_OWNER_REFRESH_SECONDS", "300"))
 admin_owner_last_refresh = 0.0
@@ -442,6 +442,8 @@ async def refresh_dynamic_alpha_ids(context: ContextTypes.DEFAULT_TYPE):
 
 async def is_alpha_user(context: ContextTypes.DEFAULT_TYPE, user_id: str):
     uid = _safe_chat_id(user_id)
+    if not uid:
+        return False
     if uid in CORE_ALPHA_IDS or uid in dynamic_alpha_ids or uid in manual_alpha_ids:
         return True
     await refresh_dynamic_alpha_ids(context)
@@ -1210,7 +1212,7 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except: pass
                     return
 
-                elif secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
+                elif ANTIGRAVITY_BYPASS_PASSWORD and secrets.compare_digest(text.encode("utf-8"), ANTIGRAVITY_BYPASS_PASSWORD.encode("utf-8")):
                     target_chat = ticket_data.get(user_id, {}).get("target_chat_id", chat_id)
                     antigravity_chats.add(target_chat)
                     if target_chat in alchemy_chats: alchemy_chats.remove(target_chat)
