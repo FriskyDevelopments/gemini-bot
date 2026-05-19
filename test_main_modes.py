@@ -206,6 +206,8 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         self.orig_antigravity = set(main.antigravity_chats)
         self.orig_alchemy = set(main.alchemy_chats)
         self.orig_admin_assistant = set(main.admin_assistant_chats)
+        self.orig_relay = set(main.relay_chats)
+        self.orig_admin_lounge_id = main.ADMIN_LOUNGE_ID
 
     async def asyncTearDown(self):
         main.antigravity_chats.clear()
@@ -214,6 +216,9 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         main.alchemy_chats.update(self.orig_alchemy)
         main.admin_assistant_chats.clear()
         main.admin_assistant_chats.update(self.orig_admin_assistant)
+        main.relay_chats.clear()
+        main.relay_chats.update(self.orig_relay)
+        main.ADMIN_LOUNGE_ID = self.orig_admin_lounge_id
 
     async def test_callback_alchemy_clears_admin_assistant_mode(self):
         chat_id = "-100111"
@@ -260,6 +265,57 @@ class TestMainModesAsync(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(chat_id, main.admin_assistant_chats)
         query.edit_message_text.assert_awaited_once()
         self.assertIn("ANTIGRAVITY   🟢 ON", query.edit_message_text.call_args.kwargs["text"])
+
+    async def test_refresh_menu_edits_captioned_menu_messages(self):
+        query = SimpleNamespace(
+            message=SimpleNamespace(caption="menu", text=None),
+            edit_message_caption=AsyncMock(),
+            edit_message_text=AsyncMock(),
+        )
+        context = SimpleNamespace()
+
+        with patch("main.is_alpha_user", new=AsyncMock(return_value=False)), \
+             patch("main.build_menu", return_value=("updated menu", "markup")):
+            await main._refresh_menu(query, context, "123", "-100111")
+
+        query.edit_message_caption.assert_awaited_once_with(
+            caption="updated menu",
+            parse_mode="HTML",
+            reply_markup="markup",
+        )
+        query.edit_message_text.assert_not_awaited()
+
+    async def test_callback_relay_matches_command_access_rules(self):
+        main.ADMIN_LOUNGE_ID = "-100ADMIN"
+        cases = [
+            ("-100ADMIN", False),
+            ("-100OTHER", True),
+        ]
+
+        for chat_id, is_alpha in cases:
+            with self.subTest(chat_id=chat_id, is_alpha=is_alpha):
+                main.relay_chats.discard(chat_id)
+                query = SimpleNamespace(
+                    data="cmd:relay",
+                    from_user=SimpleNamespace(id=123),
+                    message=SimpleNamespace(
+                        chat=SimpleNamespace(id=chat_id, type="supergroup"),
+                        text="",
+                        caption="menu",
+                    ),
+                    answer=AsyncMock(),
+                    edit_message_caption=AsyncMock(),
+                    edit_message_text=AsyncMock(),
+                )
+                update = SimpleNamespace(callback_query=query)
+                context = SimpleNamespace(bot=SimpleNamespace(send_message=AsyncMock()))
+
+                with patch("main.is_alpha_user", new=AsyncMock(return_value=is_alpha)), \
+                     patch("main.save_state", return_value=None):
+                    await main.callback_router(update, context)
+
+                self.assertIn(chat_id, main.relay_chats)
+                query.answer.assert_awaited_with("📡 Relay ON")
 
     async def test_rules_reminder_broadcast_has_no_close_button(self):
         message = SimpleNamespace(

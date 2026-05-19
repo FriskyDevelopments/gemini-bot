@@ -1537,7 +1537,11 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _refresh_menu(query, context, user_id, chat_id):
     is_alpha = await is_alpha_user(context, user_id)
     mt, rm = build_menu(chat_id, is_alpha)
-    try: await query.edit_message_text(mt, parse_mode="HTML", reply_markup=rm)
+    try:
+        if getattr(query.message, "caption", None) is not None:
+            await query.edit_message_caption(caption=mt, parse_mode="HTML", reply_markup=rm)
+        else:
+            await query.edit_message_text(mt, parse_mode="HTML", reply_markup=rm)
     except Exception: pass
 
 
@@ -1657,7 +1661,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if query.data in ["cmd:admin_assistant", "cmd:alchemy", "cmd:antigravity", "cmd:relay", "cmd:authorize_group"]:
-        if not await is_alpha_user(context, user_id): return await query.answer("⛔ Access Denied.", show_alert=True)
+        is_alpha = await is_alpha_user(context, user_id)
+        if query.data == "cmd:relay":
+            if str(chat_id) != str(ADMIN_LOUNGE_ID) and not is_alpha: return await query.answer("⛔ Access Denied.", show_alert=True)
+        elif not is_alpha: return await query.answer("⛔ Access Denied.", show_alert=True)
         if query.data == "cmd:admin_assistant":
             if chat_id in admin_assistant_chats: admin_assistant_chats.remove(chat_id)
             else:
@@ -1677,7 +1684,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 antigravity_chats.add(chat_id); alchemy_chats.discard(chat_id); admin_assistant_chats.discard(chat_id)
                 await query.answer("⚡ Antigravity Interface ONLINE.")
         elif query.data == "cmd:relay":
-            if str(chat_id) != str(ADMIN_LOUNGE_ID): return await query.answer("⛔ Admin Lounge only.", show_alert=True)
             if chat_id in relay_chats: relay_chats.remove(chat_id)
             else: relay_chats.add(chat_id)
             await query.answer(f"📡 Relay {'OFF' if chat_id not in relay_chats else 'ON'}")
