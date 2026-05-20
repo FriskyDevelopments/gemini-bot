@@ -698,7 +698,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
     if update.message and update.message.new_chat_members:
         inviter = update.message.from_user
-        inviter_name = inviter.username or inviter.first_name or "Unknown"
+        # Enforce length limit to prevent potential resource exhaustion or UI breakage
+        inviter_name = (inviter.username or inviter.first_name or "Unknown")[:100]
         for member in update.message.new_chat_members:
             if inviter.id != member.id:
                 invitations[str(member.id)] = inviter_name
@@ -1362,7 +1363,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         should_reply = False
         
     if should_reply and has_text_or_photo:
-        user_text = update.message.text or update.message.caption or ""
+        # Enforce length limit to mitigate resource exhaustion/DoS risks
+        user_text = (update.message.text or update.message.caption or "")[:4000]
         
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
