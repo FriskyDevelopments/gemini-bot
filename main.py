@@ -698,7 +698,8 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. RECORD NEW MEMBERS AND WHO INVITED THEM
     if update.message and update.message.new_chat_members:
         inviter = update.message.from_user
-        inviter_name = inviter.username or inviter.first_name or "Unknown"
+        # Enforce length limit to prevent potential resource exhaustion or UI breakage
+        inviter_name = (inviter.username or inviter.first_name or "Unknown")[:100]
         for member in update.message.new_chat_members:
             if inviter.id != member.id:
                 invitations[str(member.id)] = inviter_name
@@ -1346,7 +1347,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
                 
     # 3. CONVERSATIONAL LOGIC
-    text_lower = (update.message.text or update.message.caption or "").lower()
+    # Enforce length limit before trigger detection so prompts and triggers use the same text.
+    user_text = (update.message.text or update.message.caption or "")[:4000]
+    text_lower = user_text.lower()
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
     is_private = update.message.chat.type == "private"
@@ -1362,8 +1365,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         should_reply = False
         
     if should_reply and has_text_or_photo:
-        user_text = update.message.text or update.message.caption or ""
-        
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
             return
