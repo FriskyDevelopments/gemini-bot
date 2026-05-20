@@ -1,5 +1,7 @@
 import unittest
 import os
+import sys
+import types
 import html
 from types import SimpleNamespace
 from unittest.mock import patch, AsyncMock, MagicMock
@@ -125,6 +127,44 @@ class TestSecurityHardening(unittest.IsolatedAsyncioTestCase):
         calls = [call.kwargs.get('chat_id') for call in context.bot.send_message.call_args_list]
         self.assertIn("group_123", calls)
         self.assertIn(user_id, calls)
+
+    async def test_late_mention_after_truncation_limit_does_not_trigger_reply(self):
+        mock_msg = AsyncMock()
+        mock_msg.text = ("a" * 4000) + " pupbot?"
+        mock_msg.caption = None
+        mock_msg.photo = None
+        mock_msg.new_chat_members = None
+        mock_msg.reply_to_message = None
+        mock_msg.chat.type = "supergroup"
+        mock_msg.from_user.id = 12345
+        mock_msg.from_user.first_name = "User"
+
+        update = MagicMock()
+        update.message = mock_msg
+        update.effective_message = mock_msg
+        update.effective_user = mock_msg.from_user
+        update.effective_chat.id = 67890
+
+        context = MagicMock()
+        context.bot.id = 999
+        context.bot.username = "Geminipupbot"
+        context.bot.send_chat_action = AsyncMock()
+
+        fake_google = types.ModuleType("google")
+        fake_genai = types.ModuleType("google.generativeai")
+        fake_genai.configure = MagicMock()
+        fake_model = SimpleNamespace(
+            generate_content_async=AsyncMock(return_value=SimpleNamespace(text="response"))
+        )
+        fake_genai.GenerativeModel = MagicMock(return_value=fake_model)
+        fake_google.generativeai = fake_genai
+
+        with patch('main.is_alpha_user', new=AsyncMock(return_value=False)), \
+             patch.dict(sys.modules, {"google": fake_google, "google.generativeai": fake_genai}), \
+             patch('main.push_processed_response', new=AsyncMock()):
+            await main.lounge_host(update, context)
+
+        fake_genai.GenerativeModel.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()

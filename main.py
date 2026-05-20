@@ -1347,7 +1347,9 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
                 
     # 3. CONVERSATIONAL LOGIC
-    text_lower = (update.message.text or update.message.caption or "").lower()
+    # Enforce length limit before trigger detection so prompts and triggers use the same text.
+    user_text = (update.message.text or update.message.caption or "")[:4000]
+    text_lower = user_text.lower()
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
     bot_mentioned = "pupbot" in text_lower or "pup" in text_lower or context.bot.username.lower() in text_lower
     is_private = update.message.chat.type == "private"
@@ -1363,9 +1365,6 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         should_reply = False
         
     if should_reply and has_text_or_photo:
-        # Enforce length limit to mitigate resource exhaustion/DoS risks
-        user_text = (update.message.text or update.message.caption or "")[:4000]
-        
         # We explicitly skip slash commands meant for logic interception above so the bot doesn't reply.
         if user_text.startswith("/") and not user_text.startswith("/pup"):
             return
