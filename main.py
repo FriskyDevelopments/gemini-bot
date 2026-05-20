@@ -731,13 +731,20 @@ async def lounge_host(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text_lower = text.lower()
         
         if text_lower in ["/start", "/menu", "/help"]:
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
             reply_markup = build_menu(chat_id)
+            mode = get_effective_mode(chat_id)
+            header = ""
+            if mode == "antigravity": header = f"{ANTIGRAVITY_MENU_TEXT}\n\n"
+            elif mode == "alchemy": header = f"{ALCHEMY_MENU_TEXT}\n\n"
+            elif mode == "admin_assistant": header = f"{ADMIN_ASSISTANT_MENU_TEXT}\n\n"
+            full_menu = f"{header}{MENU_TEXT}"
             try:
                 with open(os.path.join(os.path.dirname(__file__), "assets/entrance_animation.gif"), "rb") as gif:
-                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=MENU_TEXT, parse_mode="HTML", reply_markup=reply_markup)
+                    await context.bot.send_animation(chat_id=chat_id, animation=gif, caption=full_menu, parse_mode="HTML", reply_markup=reply_markup)
             except Exception as e:
                 logging.error("Menu formatting crash", exc_info=True)
-                await context.bot.send_message(chat_id=chat_id, text=MENU_TEXT, parse_mode="HTML", reply_markup=reply_markup)
+                await context.bot.send_message(chat_id=chat_id, text=full_menu, parse_mode="HTML", reply_markup=reply_markup)
             return
 
         # Command to add debuggers
@@ -1633,7 +1640,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
              InlineKeyboardButton(f"💤 Sleep Mode {sleep_status}", callback_data="toggle_sleep")],
             [InlineKeyboardButton("⚙️ Auth Groups", callback_data="manage_auth"),
              InlineKeyboardButton("👨‍💻 Debuggers", callback_data="manage_debug")],
-            [CLOSE_BUTTON]
+            [InlineKeyboardButton("⬅️ Back", callback_data="show_menu"),
+             CLOSE_BUTTON]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
